@@ -40,7 +40,6 @@ The second script to be run is **allocate_hh.py**.
     python allocate_hh.py
     
 This script uses the outputs of *generate_controls.py* to run PopulationSim and update Soundcast inputs with edited zone-level controls. The inputs required for this script are the outputs from the previous script. This script directly calls PopulationSim, which produces a set of synthetic household and person files for the study area. These synthetic data replace existing houeshold and person data for these zones and are written to file for use in a new Soundcast scenario run. Final outputs are available in the **results** folder:
-
     - parcels_urbansim.txt: Soundcast parcel-level landuse file, updated for total number of households per parcel
     - hh_and_persons.h5: Soundcast synthetic household and person data, updated to reflect land use changes. 
     
