@@ -1,3 +1,17 @@
+#Copyright [2022] [Puget Sound Regional Council]
+
+#Licensed under the Apache License, Version 2.0 (the "License");
+#you may not use this file except in compliance with the License.
+#You may obtain a copy of the License at
+
+#    http://www.apache.org/licenses/LICENSE-2.0
+
+#Unless required by applicable law or agreed to in writing, software
+#distributed under the License is distributed on an "AS IS" BASIS,
+#WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#See the License for the specific language governing permissions and
+#limitations under the License.
+
 import geopandas as gpd
 import pandas as pd
 import numpy as np
@@ -7,8 +21,11 @@ import time
 from shapely import wkt
 from shapely.geometry import Point
 import h5py
+import yaml
 
 def h5_to_data_frame(h5file, integer_cols, table_name):
+    """Load h5 tables as Pandas DataFrame object"""
+    
     table = h5file[table_name]
     col_dict = {}
     #cols = ['hhno', 'hhtaz']
@@ -29,6 +46,7 @@ def update_df(target_df, target_index, update_df, update_index, col_name):
     target_df.update(update_df)
     target_df.reset_index(inplace = True)
     update_df.reset_index(inplace = True)
+
     return target_df
 
 def recode(df, col, new_col, bins, labels, group_by_col):
@@ -36,116 +54,113 @@ def recode(df, col, new_col, bins, labels, group_by_col):
     if new_col in df.columns:
         df = df.drop(columns = [new_col])
     df.insert(len(bins), new_col, category)
+
     return pd.crosstab(df[group_by_col], df[new_col]).rename_axis(None, axis=1)
-    #df = pd.DataFrame(df.groupby(group_by_col)[new_col].sum())
 
-model_dir = r'L:\vision2050\soundcast\dseis\integrated\final_runs\tod\tod_run_8.run_2018_10_29_15_01\2050'
-data_gdb_path = r'R:\e2projects_two\Stefan\soundcast_landuse_scenario_builder\data\New File Geodatabase.gdb'
-land_use_path = r'R:\e2projects_two\SoundCast\Inputs\dev\landuse\2050\test_2050'
-output_dir = r'R:\e2projects_two\Stefan\soundcast_landuse_scenario_builder'
-taz_id = 'taz'
-block_group_id = 'geoid10'
-puma_id = 'pumace10'
-parcel_id = 'PARCELID'
-# Load GIS files:
-block_group_gdf = gpd.read_file(data_gdb_path, layer = 'block_groups_2010')
 
-taz_study_area = gpd.read_file(data_gdb_path, layer = 'study_area_taz')
+config = yaml.safe_load(open("config.yaml"))
 
-puma_gdf = gpd.read_file(data_gdb_path, layer = 'pumas_2010')
+## Create output directories
+#if not os.path.exists('populationsim'):
+#    os.mkdir('controls')
 
-# parcels
-parcels_gdf = pd.read_csv(os.path.join(model_dir, 'inputs\scenario\landuse\parcels_urbansim.txt'), sep = ' ')
+# Load GIS files
+# 3 layers are required, including regionwide block groups and PUMAs.
+# a layer that covers a specific study area that can be altered is provided
+# Only households within the study area will be available for allocation
+block_group_gdf = gpd.read_file(config['data_gdb_path'], layer='block_groups_2010')
+taz_study_area = gpd.read_file(config['data_gdb_path'], layer='study_area_taz')
+puma_gdf = gpd.read_file(config['data_gdb_path'], layer='pumas_2010')
+
+# Load parcel data from Soundcast input as geoDataframe
+parcels_gdf = pd.read_csv(os.path.join(config['model_dir'], 'inputs\scenario\landuse\parcels_urbansim.txt'), sep = ' ')
 geometry = [Point(xy) for xy in zip(parcels_gdf['XCOORD_P'], parcels_gdf['YCOORD_P'])]
 parcels_gdf = parcels_gdf.drop(['YCOORD_P', 'XCOORD_P'], axis=1)
 parcels_gdf = gpd.GeoDataFrame(parcels_gdf, crs="EPSG:2285", geometry=geometry)
 
-# hhs and persons:
-hdf_file = h5py.File(os.path.join(land_use_path, 'hh_and_persons.h5'), "r")
+# Load synthetic household and person tables from a Soundcast run
+hdf_file = h5py.File(os.path.join(config['land_use_path'], 'hh_and_persons.h5'), "r")
 persons = h5_to_data_frame(hdf_file, ['id'], 'Person')
 hh = h5_to_data_frame(hdf_file, ['id'], 'Household')
 
-#get parcels that are withing the TAZ layer
+# Select parcels that are within the study area
 parcels_cols = list(parcels_gdf.columns)
-parcels_cols.extend([taz_id, block_group_id, puma_id])
-
+parcels_cols.extend([config['taz_id'], config['block_group_id'], config['puma_id']])
 parcels_gdf = gpd.sjoin(parcels_gdf, taz_study_area, how='inner')
 parcels_gdf = parcels_gdf[[col for col in parcels_cols if col in parcels_gdf.columns]]
 
-#now get block_groups that are covered by parcels
+# Select block groups that are covered by parcels in study area
 parcels_gdf = gpd.sjoin(parcels_gdf, block_group_gdf, how='inner')
 parcels_gdf = parcels_gdf[[col for col in parcels_cols if col in parcels_gdf.columns]]
 
-# its possible that a TAZ could fall in more than 1 PUMA
-# so use the one that the TAZ centroid falls in. 
+# Identify PUMA for a TAZ based on centroid location
 taz_points = taz_study_area.copy()
 taz_points.geometry = taz_points.geometry.centroid
 taz_puma_gdf = gpd.sjoin(taz_points, puma_gdf, how='inner')
-taz_puma_gdf = taz_puma_gdf[[taz_id, puma_id]]
+taz_puma_gdf = taz_puma_gdf[[config['taz_id'], config['puma_id']]]
 taz_puma_gdf['region'] = 1
 
-##### write out popsim geog file
-taz_puma_gdf.rename(columns={taz_id:'taz_id', puma_id:'PUMA'}, inplace = True)
+# Write PopulationSim geographic crosswalk between TAZs and PUMAs
+taz_puma_gdf.rename(columns={config['taz_id']:'taz_id', config['puma_id']:'PUMA'}, inplace = True)
 for col in taz_puma_gdf.columns:
     taz_puma_gdf[col] = taz_puma_gdf[col].astype('int64')
 
-taz_puma_gdf.to_csv(os.path.join(output_dir, 'Populationsim/data/geo_cross_walk.csv'), index = False)
+taz_puma_gdf.to_csv(r'PopulationSim\data\geo_cross_walk.csv', index=False)
 
-
-
-#####Build controls from future land use
-
-study_area_hhs = hh[hh['hhparcel'].isin(parcels_gdf[parcel_id])]
-study_area_hhs = update_df(study_area_hhs, 'hhparcel', parcels_gdf, parcel_id, taz_id)
+# Build PopulationSim control file from future land use
+# Distribution of household and person characteristics will be applied to any change in totals
+study_area_hhs = hh[hh['hhparcel'].isin(parcels_gdf[config['parcel_id']])]
+study_area_hhs = update_df(study_area_hhs, 'hhparcel', parcels_gdf, config['parcel_id'], config['taz_id'])
 
 study_area_persons = persons[persons['hhno'].isin(study_area_hhs['hhno'])]
-study_area_persons = update_df(study_area_persons, 'hhno', study_area_hhs, 'hhno', taz_id)
+study_area_persons = update_df(study_area_persons, 'hhno', study_area_hhs, 'hhno', config['taz_id'])
 
-#get hh workers from person table
+# Get household worker distribution from person table
 workers = study_area_persons[study_area_persons['pwtyp']>0]
 hh_workers = workers.groupby('hhno').size().reset_index()
 hh_workers = hh_workers.rename(columns={0:'hhwkrs'})
 study_area_hhs = update_df(study_area_hhs, 'hhno', hh_workers, 'hhno', 'hhwkrs')
 
-
+# Household categories
 col_list = []
-####### hh categories
 # total households:
-col_list.append(pd.DataFrame(study_area_hhs.groupby(taz_id).size(), columns = ['hh_taz_weight']))
-# hh size:
-col_list.append(recode(study_area_hhs, 'hhsize', 'num_hh', [0, 1, 2, 3, 4, 5, 6, 200], ['hh_size_1','hh_size_2', 'hh_size_3', 'hh_size_4', 'hh_size_5', 'hh_size_6', 'hh_size_7_plus'], taz_id))
+col_list.append(pd.DataFrame(study_area_hhs.groupby(config['taz_id']).size(), columns = ['hh_taz_weight']))
+# households size:
+col_list.append(recode(study_area_hhs, 'hhsize', 'num_hh', [0, 1, 2, 3, 4, 5, 6, 200], 
+                       ['hh_size_1','hh_size_2', 'hh_size_3', 'hh_size_4', 'hh_size_5', 'hh_size_6', 'hh_size_7_plus'], config['taz_id']))
 # workers:
-col_list.append(recode(study_area_hhs, 'hhwkrs', 'num_workers', [-1, 0, 1, 2, 999], ['workers_0','workers_1', 'workers_2', 'workers_3_plus'], taz_id))
+col_list.append(recode(study_area_hhs, 'hhwkrs', 'num_workers', [-1, 0, 1, 2, 999], 
+                       ['workers_0','workers_1', 'workers_2', 'workers_3_plus'], config['taz_id']))
 # income 
-col_list.append(recode(study_area_hhs, 'hhincome', 'income_cat', [-1, 15000, 30000, 60000, 100000, 999999999], ['income_lt15','income_gt15-lt30', 'income_gt30-lt60', 'income_gt60-lt100', 'income_gt100'], taz_id))
+col_list.append(recode(study_area_hhs, 'hhincome', 'income_cat', [-1, 15000, 30000, 60000, 100000, 999999999], 
+                       ['income_lt15','income_gt15-lt30', 'income_gt30-lt60', 'income_gt60-lt100', 'income_gt100'], config['taz_id']))
 
 
-####### persons categories
-# total persons
-col_list.append(pd.DataFrame(study_area_persons.groupby(taz_id).size(), columns = ['pers_taz_weight']))
-# school:
-col_list.append(recode(study_area_persons, 'pstyp', 'school', [-1, 0, 100], ['school_no','school_yes'], taz_id))
-# gender:
-col_list.append(recode(study_area_persons, 'pgend', 'gender', [0, 1, 100], ['male','female'], taz_id))
-# age:
-col_list.append(recode(study_area_persons, 'pagey', 'age', [-1, 19, 35, 60, 999], ['age_19_and_under', 'age_20_to_35', 'age_35_to_60', 'age_above_60'], taz_id))
-# worker_status
-col_list.append(recode(study_area_persons, 'pwtyp', 'worker', [0, 999], ['is_worker'], taz_id))
+# Person categories
+# Total persons
+col_list.append(pd.DataFrame(study_area_persons.groupby(config['taz_id']).size(), columns = ['pers_taz_weight']))
+# School:
+col_list.append(recode(study_area_persons, 'pstyp', 'school', [-1, 0, 100], ['school_no','school_yes'], config['taz_id']))
+# Gender:
+col_list.append(recode(study_area_persons, 'pgend', 'gender', [0, 1, 100], ['male','female'], config['taz_id']))
+# Age:
+col_list.append(recode(study_area_persons, 'pagey', 'age', [-1, 19, 35, 60, 999], 
+                       ['age_19_and_under', 'age_20_to_35', 'age_35_to_60', 'age_above_60'], config['taz_id']))
+# Worker status
+col_list.append(recode(study_area_persons, 'pwtyp', 'worker', [0, 999], ['is_worker'], config['taz_id']))
 
 df = pd.concat(col_list, axis = 1)
 df.reset_index(inplace = True)
-df.rename(columns={taz_id:'taz_id'}, inplace = True)
+df.rename(columns={config['taz_id']:'taz_id'}, inplace = True)
 df['taz_id'] = df['taz_id'].astype('int64')
 df.fillna(0, inplace = True)
-#df['block_group_id'] = df[geoid_name]
+df.to_csv(r'PopulationSim/data/future_controls.csv', index=False)
 
-df.to_csv(os.path.join(output_dir, 'Populationsim/data/future_controls.csv'), index = False)
-
-# seed hh and persons
-seed_hh = pd.read_csv(r'R:\e2projects_two\SyntheticPopulation_2018\keep\2018\populationsim_files\data\seed_households.csv')
+# Create seed hh and person files; include only seed households and persons from PUMAs within the study area
+seed_hh = pd.read_csv(config['seed_hh_file'])
 seed_hh = seed_hh[seed_hh['PUMA'].isin(taz_puma_gdf['PUMA'])]
-seed_hh.to_csv(os.path.join(output_dir, 'Populationsim/data/seed_households.csv'), index = False)
+seed_hh.to_csv(r'PopulationSim/data/seed_households.csv', index=False)
 
-seed_persons = pd.read_csv(r'R:\e2projects_two\SyntheticPopulation_2018\keep\2018\populationsim_files\data\seed_persons.csv')
+seed_persons = pd.read_csv(config['seed_person_file'])
 seed_persons = seed_persons[seed_persons['hhnum'].isin(seed_hh['hhnum'])]
-seed_persons.to_csv(os.path.join(output_dir, 'Populationsim/data/seed_persons.csv'), index = False)
+seed_persons.to_csv(r'PopulationSim/data/seed_persons.csv', index=False)

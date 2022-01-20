@@ -1,0 +1,17 @@
+# Location of PUMS seed household and person data
+seed_hh_file: 'R:\e2projects_two\SyntheticPopulation_2018\keep\2018\populationsim_files\data\seed_households.csv'
+seed_person_file: 'R:\e2projects_two\SyntheticPopulation_2018\keep\2018\populationsim_files\data\seed_persons.csv'
+
+# Location of model run to update synthetic household/person and parcel data
+model_dir: 'L:\vision2050\soundcast\dseis\integrated\final_runs\tod\tod_run_8.run_2018_10_29_15_01\2050'
+
+# Geodatabase containing layers of study area
+data_gdb_path: 'inputs\New File Geodatabase.gdb'
+
+# Soundcast run used to build target distributions as inputs for populationsim
+land_use_path: 'R:\e2projects_two\SoundCast\Inputs\dev\landuse\2050\test_2050'
+
+taz_id: 'taz'
+block_group_id: 'geoid10'
+puma_id: 'pumace10'
+parcel_id: 'PARCELID'
