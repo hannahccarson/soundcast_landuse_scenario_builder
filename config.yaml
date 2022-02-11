@@ -11,6 +11,9 @@ data_gdb_path: 'inputs\New File Geodatabase.gdb'
 # Soundcast run used to build target distributions as inputs for populationsim
 land_use_path: 'R:\e2projects_two\SoundCast\Inputs\dev\landuse\2050\test_2050'
 
+update_jobs: True
+update_hh: True
+
 taz_id: 'taz'
 block_group_id: 'geoid10'
 puma_id: 'pumace10'

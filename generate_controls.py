@@ -153,7 +153,15 @@ df = pd.concat(col_list, axis = 1)
 df.reset_index(inplace = True)
 df.rename(columns={config['taz_id']:'taz_id'}, inplace = True)
 df['taz_id'] = df['taz_id'].astype('int64')
+
+
+# Define household totals from allocation file
+if config['update_hh']:
+    df_allocate = pd.read_csv(r'inputs/allocation.csv')
+    df = df.merge(df_allocate[['zone_id','households']], how='left', left_on='taz_id', right_on='zone_id')
+    df['hh_taz_weight'] = df['households'].copy()
 df.fillna(0, inplace = True)
+df.drop(['households','zone_id'], axis=1, inplace=True)
 df.to_csv(r'PopulationSim/data/future_controls.csv', index=False)
 
 # Create seed hh and person files; include only seed households and persons from PUMAs within the study area

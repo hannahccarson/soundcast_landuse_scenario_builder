@@ -59,7 +59,7 @@ for taz in synth_hhs['taz_id'].unique():
     if taz_parcels['hh_p'].sum()==0:
         # if no exisiting HHs in TAZ, assign uniform distribution; one hh for each parcel
         taz_parcels['hh_p'] = 1
-    # Select are parcels in the TAZ with households 
+    # Select all parcels in the TAZ with households 
     taz_parcels = taz_parcels[taz_parcels['hh_p']>0][['taz_p', 'hh_p', 'parcelid']]
     # Create records for each household and parcel
     taz_parcels = taz_parcels.loc[taz_parcels.index.repeat(taz_parcels['hh_p'])]
@@ -83,6 +83,24 @@ df.index.name = 'parcelid'
 new_parcel_df = new_parcel_df.merge(df, left_on='parcelid', right_index=True, how='left')
 new_parcel_df['hh_p'] = new_parcel_df['new_hh'].fillna(new_parcel_df['hh_p'])
 new_parcel_df.drop('new_hh', axis=1, inplace=True)
+
+# Update employment
+if config['update_jobs']:
+    df_allocate = pd.read_csv(r'inputs/allocation.csv')
+    df_list = []
+    for taz in df_allocate['zone_id'].unique():
+        # Select all parcels in the zones
+        df = new_parcel_df[new_parcel_df['taz_p'] == taz]
+
+        # Scale the jobs based on existing distribution across sectors
+        new_total = df_allocate[df_allocate['zone_id'] == taz]['employment']
+        emp_factor = (new_total/df['emptot_p'].sum()).values[0]
+        emp_cols = ['empedu_p', 'empfoo_p', 'empgov_p', 'empind_p', 'empmed_p','empofc_p', 'empoth_p', 'empret_p', 'emprsc_p', 'empsvc_p']
+        new_parcel_df.loc[df.index, emp_cols] = (df[emp_cols]*emp_factor).round()
+        # Note: the exact totals will not perfectly match the emptot_p specified, but will be generally close
+
+# Update parcel columns with these new totals
+new_parcel_df['emptot_p'] = new_parcel_df[emp_cols].sum(axis=1)
 
 if not os.path.exists(soundcast_inputs_dir):
     os.mkdir(soundcast_inputs_dir)
