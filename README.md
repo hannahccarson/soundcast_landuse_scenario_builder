@@ -21,6 +21,7 @@ The tool requires inputs from multiple sources. Paths to inputs are set in the c
 
 ### Configuring Inputs
 The primary purpose of this tool is to apply TAZ-level household and emplyoment adjustments to generate Soundcast inputs. These changes are made in **inputs\allocation.csv**. For any zone in the study area, users can set the new total number of households in a zone by updating the "households" field. Total employment may also be updated based on the "employment" field. Currently, only TAZs within the study may be updated for either employment or households. Whatever values are provided for in the allocation.csv file will be applied as scaling factors to the data. If you prefer not to apply either of these measures, they can turned off in config.yaml as follows:
+
     - update_jobs: False
     - update_hh: False
 
