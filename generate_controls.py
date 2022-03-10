@@ -105,7 +105,7 @@ taz_puma_gdf.rename(columns={config['taz_id']:'taz_id', config['puma_id']:'PUMA'
 for col in taz_puma_gdf.columns:
     taz_puma_gdf[col] = taz_puma_gdf[col].astype('int64')
 
-taz_puma_gdf.to_csv(r'PopulationSim\data\geo_cross_walk.csv', index=False)
+taz_puma_gdf.to_csv(os.path.join(config['data_dir'],'geo_cross_walk.csv'), index=False)
 
 # Build PopulationSim control file from future land use
 # Distribution of household and person characteristics will be applied to any change in totals
@@ -157,18 +157,22 @@ df['taz_id'] = df['taz_id'].astype('int64')
 
 # Define household totals from allocation file
 if config['update_hh']:
-    df_allocate = pd.read_csv(r'inputs/allocation.csv')
+    df_allocate = pd.read_csv(os.path.join(config['input_dir'],r'allocation.csv'))
     df = df.merge(df_allocate[['zone_id','households']], how='left', left_on='taz_id', right_on='zone_id')
     df['hh_taz_weight'] = df['households'].copy()
 df.fillna(0, inplace = True)
 df.drop(['households','zone_id'], axis=1, inplace=True)
+if not os.path.isdir(r'PopulationSim/data'):
+    os.mkdir(r'PopulationSim/data')
+# Enforce integers
+df = df.astype('int')
 df.to_csv(r'PopulationSim/data/future_controls.csv', index=False)
 
 # Create seed hh and person files; include only seed households and persons from PUMAs within the study area
-seed_hh = pd.read_csv(config['seed_hh_file'])
+seed_hh = pd.read_csv(os.path.join(config['data_dir'],config['seed_hh_file']))
 seed_hh = seed_hh[seed_hh['PUMA'].isin(taz_puma_gdf['PUMA'])]
 seed_hh.to_csv(r'PopulationSim/data/seed_households.csv', index=False)
 
-seed_persons = pd.read_csv(config['seed_person_file'])
+seed_persons = pd.read_csv(os.path.join(config['data_dir'],config['seed_person_file']))
 seed_persons = seed_persons[seed_persons['hhnum'].isin(seed_hh['hhnum'])]
 seed_persons.to_csv(r'PopulationSim/data/seed_persons.csv', index=False)

@@ -13,6 +13,7 @@
 #limitations under the License.
 
 import os
+import shutil
 import geopandas as gpd
 import pandas as pd
 import numpy as np
@@ -23,6 +24,11 @@ import yaml
 import subprocess
 import h5py
 
+# Copy user inputs to and set up populationsim directory
+# config = yaml.safe_load(open("config.yaml"))
+# shutil.copyfile(os.path.join(config['data_dir'],'geo_cross_walk.csv'), 'Populationsim/data/geo_cross_walk.csv')
+# if not os.path.isdir(r'PopulationSim/output'):
+    # os.mkdir(r'PopulationSim/output')
 
 # Run populationsim with controls for study area
 returncode = subprocess.call([sys.executable, 'PopulationSim/run_populationsim.py', '-w', 'Populationsim'])
@@ -86,7 +92,7 @@ new_parcel_df.drop('new_hh', axis=1, inplace=True)
 
 # Update employment
 if config['update_jobs']:
-    df_allocate = pd.read_csv(r'inputs/allocation.csv')
+    df_allocate = pd.read_csv(os.path.join(config['input_dir'],r'allocation.csv'))
     df_list = []
     for taz in df_allocate['zone_id'].unique():
         # Select all parcels in the zones
