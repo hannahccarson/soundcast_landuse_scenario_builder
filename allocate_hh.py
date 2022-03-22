@@ -25,10 +25,10 @@ import subprocess
 import h5py
 
 # Copy user inputs to and set up populationsim directory
-# config = yaml.safe_load(open("config.yaml"))
-# shutil.copyfile(os.path.join(config['data_dir'],'geo_cross_walk.csv'), 'Populationsim/data/geo_cross_walk.csv')
-# if not os.path.isdir(r'PopulationSim/output'):
-    # os.mkdir(r'PopulationSim/output')
+config = yaml.safe_load(open("config.yaml"))
+shutil.copyfile(os.path.join(config['data_dir'],'geo_cross_walk.csv'), 'Populationsim/data/geo_cross_walk.csv')
+if not os.path.isdir(r'PopulationSim/output'):
+    os.mkdir(r'PopulationSim/output')
 
 # Run populationsim with controls for study area
 returncode = subprocess.call([sys.executable, 'PopulationSim/run_populationsim.py', '-w', 'Populationsim'])
