@@ -23,29 +23,35 @@ import sys
 import yaml
 import subprocess
 import h5py
+from pathlib import Path
 
 # Copy user inputs to and set up populationsim directory
 config = yaml.safe_load(open("config.yaml"))
-shutil.copyfile(os.path.join(config['data_dir'],'geo_cross_walk.csv'), 'Populationsim/data/geo_cross_walk.csv')
-if not os.path.isdir(r'PopulationSim/output'):
-    os.mkdir(r'PopulationSim/output')
+popsim_run_dir_path = Path(config['popsim_run_dir'])
+shutil.copyfile('populationsim_settings.yaml', popsim_run_dir_path/'configs'/'settings.yaml')
+shutil.copyfile('controls.csv', popsim_run_dir_path/'configs'/'controls.csv')
+
+# Set up other paths
+land_use_path = Path(config['input_land_use_path'])
+#if not os.path.isdir(r'PopulationSim/output'):
+#    os.mkdir(r'PopulationSim/output')
 
 # Run populationsim with controls for study area
-returncode = subprocess.call([sys.executable, 'PopulationSim/run_populationsim.py', '-w', 'Populationsim'])
+returncode = subprocess.call([sys.executable, 'run_populationsim.py', '-w', config['popsim_run_dir']])
 if returncode != 0:
     sys.exit(1)
 
-config = yaml.safe_load(open("config.yaml"))
+#config = yaml.safe_load(open("config.yaml"))
 soundcast_inputs_dir = 'results'
 
 # Load data
-parcels = pd.read_csv(os.path.join(config['land_use_path'],'parcels_urbansim.txt'),  delim_whitespace=True)
-synth_hhs = pd.read_csv(r'PopulationSim\output\synthetic_households.csv')
-synth_persons = pd.read_csv(r'PopulationSim\output\synthetic_persons.csv')
+parcels = pd.read_csv(land_use_path/'parcels_urbansim.txt', delim_whitespace=True)
+synth_hhs = pd.read_csv(popsim_run_dir_path/'output'/'synthetic_households.csv')
+synth_persons = pd.read_csv(popsim_run_dir_path/'output'/'synthetic_persons.csv')
 
 # Load persons and households table from model run
 # This file will be modified/replaced by new results from synthetic households 
-myh5 = h5py.File( os.path.join(config['model_dir'],r'inputs/scenario/landuse/hh_and_persons.h5'),'r')
+myh5 = h5py.File(land_use_path/'hh_and_persons.h5','r')
 old_h5_hh = pd.DataFrame()
 for col in myh5['Household'].keys():
     old_h5_hh[col] = myh5['Household'][col][:]
@@ -92,7 +98,7 @@ new_parcel_df.drop('new_hh', axis=1, inplace=True)
 
 # Update employment
 if config['update_jobs']:
-    df_allocate = pd.read_csv(os.path.join(config['input_dir'],r'allocation.csv'))
+    df_allocate = pd.read_csv(popsim_run_dir_path/'allocation.csv')
     df_list = []
     for taz in df_allocate['zone_id'].unique():
         # Select all parcels in the zones
@@ -206,7 +212,7 @@ export_person_df = old_h5_person[old_h5_person['hhno'].isin(export_hh_df['hhno']
 export_person_df = export_person_df.append(new_person_df[old_h5_person.columns])
 
 # Write to h5 file
-out_h5 = h5py.File(os.path.join(soundcast_inputs_dir,'hh_and_persons.h5'),'w')
+out_h5 = h5py.File(popsim_run_dir_path/'output'/'hh_and_persons.h5','w')
 for key in ['Person','Household']:
     out_h5.create_group(key)
 for col in export_person_df.columns:

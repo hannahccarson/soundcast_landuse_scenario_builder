@@ -1,13 +1,19 @@
 # Set data and user input location
-data_dir: 'example\data'
-input_dir: 'example\input'
+input_land_use_path: 'C:\Workspace\land_use_test\example\inputs\land_use'
+input_pums_data_path: 'C:\Workspace\land_use_test\example\inputs\pums_data'
+input_gis_data_path: 'C:\Workspace\land_use_test\example\inputs\gis_data.gdb'
 
-# Geodatabase containing layers of study area
-data_gdb_path: 'example\data\New File Geodatabase.gdb'
-
-# Location of PUMS seed household and person data
+# File names. Most likely, these will remain unchanged. 
 seed_hh_file: 'seed_households.csv'
 seed_person_file: 'seed_persons.csv'
+parcel_file: 'parcels_urbansim.txt'
+synthetic_pop_file: 'hh_and_persons.h5'
+puma_layer: 'pumas_2010'
+taz_layer: 'study_area_taz'
+
+# Output dir. This is where the inputs to populationsim will reside. 
+# Warning- this entire directory will be over-written. 
+popsim_run_dir: 'C:/Workspace/land_use_test/example/populationsim_run_dir'
 
 # Location of model run to update synthetic household/person and parcel data
 model_dir: 'L:\vision2050\soundcast\dseis\integrated\final_runs\tod\tod_run_8.run_2018_10_29_15_01\2050'
@@ -22,4 +28,4 @@ update_hh: True
 taz_id: 'taz'
 block_group_id: 'geoid10'
 puma_id: 'pumace10'
-parcel_id: 'PARCELID'
+parcel_id: 'parcelid'
