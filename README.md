@@ -16,43 +16,44 @@ After installing this environment, activate it as follows. This environment must
     conda activate scenario_landuse
 
 ## Inputs
-The tool requires inputs from multiple sources. The example folder contains 2 directories of input that are required to run the tool.
-- data
-    - geo_cross_walk.csv
+
+The tool requires standard inputs. [Users can download example input data that here.](https://file.ac/zMj1JWnmnGg/). Each of the following folder locations must be specified in config.yaml.
+- land_use
+     - hh_and_persons.h5: existing Soundcast synthetic household and population file
+     - parcels_urbansim.txt: Soundcast land use file to be used for distribution controls 
+- pums_data
     - seed_household.csv: PUMS seed household records; these seed households are replicated by PopulationSim to match zonal demographic distributions
     - seed_persons.csv: PUMS seed person records
-    - Zone system geodatabase: ArcGIS geodatabase that contains layers of zones included in the landuse changes
-- input
-    - allocation.csv
+- gis_data.gdb: geodatabase containing zone shapefile of zones that are to be changed. 
+
+Note that in the [provided example data](https://file.ac/zMj1JWnmnGg/) the land_use folder contains a "2050" sub-directory. This designates this data as 2050. Users can add additional years or scenarios here and should update the config setting "input_land_use_path" to full path of the desired directory.
 
 ### Configuring Inputs
-These data are required, but their location can be set and changed in config.yaml, located in the project root. Additional paths must also be defined, which point to inputs that are generally accessed from other (non-local) locations. These are often large files part of an existing Soundcast run. The following are paths and definitions that should be checked before running. The default is set to run the included example run by default.
+Once data has been provided, the location of this data must be specified in config.yaml. The following input locations must be updated by the user before running:
 
-- data_dir: location of data referenced above
-- input_dir: specification of total households and jobs in a study area
-- data_gdb_path: ArcGIS geodatabase that contains layers of zones included in the landuse changes
-- seed_hh_file: PUMS seed household records file name (assumed to be stored under data_dir folder)
-- seed_person_file: PUMS seed person records file name (assumed to be stored under data_dir folder)
-- model_dir: location of a Soundcast run that contains inputs that will be modified by this tool
-- land_use_path: location of a Soundcast run used to define demographic distributions; these are held constant as the totals are changed by the user
+- input_land_use_path
+- input_pums_data_path
+- input_gis_data_path
 
+Users must also update the **'output_dir'** field to specify where the outputs and intermediate data should be stored.
 
-The primary purpose of this tool is to apply TAZ-level household and emplyoment adjustments to generate Soundcast inputs. These changes are made in **inputs\allocation.csv**. For any zone in the study area, users can set the new total number of households in a zone by updating the "households" field. Total employment may also be updated based on the "employment" field. Currently, only TAZs within the study may be updated for either employment or households. Whatever values are provided for in the allocation.csv file will be applied as scaling factors to the data. If you prefer not to apply either of these measures, they can turned off in config.yaml as follows:
+Additional variables in the config should not need to be changed unless the users wants to customize field names. 
 
-    - update_jobs: False
-    - update_hh: False
-    
-In the example run, total households for a small set of zones are grown at a fixed percent and jobs in all these areas set to a fixed number of 1,000 jobs per zone. The may be edited in the allocation.csv file. 
+With these settings configured, the first step of the tool can be run. After the first step, users can make changes to the land use allocation before running the second step, which will produce the final outputs. These steps are described in detail below. 
 
-## Scripts
+## Running the Tool
 Two scripts are required to produce the Soundcast input files. 
 
 ### Generate Controls
-The first to be run is **generate_controls.py**. After populating input directories in config.yaml, this script be run with
+The first to be run is **generate_controls.py**. After populating input directories in config.yaml, this script can be run with
 
      python generate_controls.py
 
-This script generates the necessary inputs to generate the synthetic household and population files for a defined study area. Based on zones included in the GeoDatabase, a set of PopulationSim control files and other inputs are generated. Seed records are selected from the study area and used to produce the refined synthetic populations. The outputs from this process will be available in the *PopulationSim\data* directory:
+This script generates the necessary inputs to generate the synthetic household and population files for a defined study area. Based on zones included in the GeoDatabase, a set of PopulationSim control files and other inputs are generated. Seed records are selected from the study area and used to produce the refined synthetic populations. The outputs from this process will be available in the location specified in 'output_dir' in config.yaml, and will include the following:
+    - configs
+    - data
+    - output
+        - all outputs of populationsim and this tool, including
      - future_controls.csv: primary control totals for all controlled variables within the study area. 
          - Users can edit the **hh_taz_weight** field to change the total number of households per zone. 
      - geo_cross_walk.csv: geographic relationship between input zones and PUMAs (relating the seed files to the study area)
