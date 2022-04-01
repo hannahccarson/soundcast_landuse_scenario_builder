@@ -77,7 +77,7 @@ gis_path = Path(config['input_gis_data_path'])
 for folder in ['configs','data','output']:
     if os.path.exists(popsim_run_dir_path/folder):
         shutil.rmtree(popsim_run_dir_path/folder)
-        os.makedirs(popsim_run_dir_path/folder)
+    os.makedirs(popsim_run_dir_path/folder)
 
 
 # Load GIS files
