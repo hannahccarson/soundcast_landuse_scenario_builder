@@ -63,10 +63,9 @@ def recode(df, col, new_col, bins, labels, group_by_col):
 
 config = yaml.safe_load(open("config.yaml"))
 
-# create output dir
-if os.path.exists(config['output_dir']):
-            shutil.rmtree(config['output_dir'])
-os.makedirs(config['output_dir'])
+# create output dir if it doesn't exist
+if not os.path.exists(config['output_dir']):
+    os.makedirs(config['output_dir'])
 
 # Setup paths
 popsim_run_dir_path = Path(config['output_dir'])
@@ -75,10 +74,10 @@ pums_path = Path(config['input_pums_data_path'])
 gis_path = Path(config['input_gis_data_path'])
 
 # create sub-directories in popsim folder:
-os.makedirs(popsim_run_dir_path/'configs')
-os.makedirs(popsim_run_dir_path/'data')
-os.makedirs(popsim_run_dir_path/'output')
-
+for folder in ['configs','data','output']:
+    if os.path.exists(popsim_run_dir_path/folder):
+        shutil.rmtree(popsim_run_dir_path/folder)
+        os.makedirs(popsim_run_dir_path/folder)
 
 
 # Load GIS files
@@ -191,7 +190,7 @@ allocate_df = df[['taz_id', 'hh_taz_weight']]
 allocate_df.rename(columns={'hh_taz_weight' : 'households'}, inplace = True)
 allocate_df = allocate_df.merge(parcels_gdf.groupby('taz_id')['emptot_p'].sum().reset_index(), how = 'left', on = 'taz_id')
 allocate_df.rename(columns={'emptot_p' : 'employment'}, inplace = True)
-allocate_df.to_csv(popsim_run_dir_path/'data'/'allocation.csv', index = False)
+allocate_df.to_csv(popsim_run_dir_path/'data'/'user_allocation.csv', index = False)
 
 
 #if config['update_hh']:

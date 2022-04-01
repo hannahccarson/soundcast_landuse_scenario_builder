@@ -36,7 +36,7 @@ land_use_path = Path(config['input_land_use_path'])
 
 # Update controls with allocation file before running popsim:
 if config['update_hh']:
-    df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'allocation.csv')
+    df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
     df = pd.read_csv(popsim_run_dir_path/'data'/'future_controls.csv')
     df = df.merge(df_allocate[['taz_id','households']], how='left', on='taz_id')
     df['hh_taz_weight'] = df['households'].copy()
@@ -110,7 +110,7 @@ new_parcel_df.drop('new_hh', axis=1, inplace=True)
 
 # Update employment
 if config['update_jobs']:
-    df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'allocation.csv')
+    df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
     df_list = []
     for taz in df_allocate['taz_id'].unique():
         # Select all parcels in the zones

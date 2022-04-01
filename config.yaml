@@ -1,7 +1,7 @@
 # Set data and user input location
-input_land_use_path: 'C:\Workspace\land_use_test\example\lu_allocation_inputs\land_use\2050'
-input_pums_data_path: 'C:\Workspace\land_use_test\example\lu_allocation_inputs\pums_data'
-input_gis_data_path: 'C:\Workspace\land_use_test\example\lu_allocation_inputs\gis_data.gdb'
+input_land_use_path: 'C:\Users\bnichols\Documents\soundcast_landuse_scenario_builder\example\lu_allocation_inputs\land_use\2050'
+input_pums_data_path: 'C:\Users\bnichols\Documents\soundcast_landuse_scenario_builder\example\lu_allocation_inputs\pums_data'
+input_gis_data_path: 'C:\Users\bnichols\Documents\soundcast_landuse_scenario_builder\example\lu_allocation_inputs\gis_data.gdb'
 
 # File names. Most likely, these will remain unchanged. 
 seed_hh_file: 'seed_households.csv'
@@ -13,14 +13,7 @@ taz_layer: 'study_area_taz'
 
 # Output dir. This is where the inputs to populationsim will reside. 
 # Warning- this entire directory will be over-written. 
-output_dir: 'C:/Workspace/land_use_test/example/populationsim_run_dir'
-
-# Location of model run to update synthetic household/person and parcel data
-#model_dir: 'L:\vision2050\soundcast\dseis\integrated\final_runs\tod\tod_run_8.run_2018_10_29_15_01\2050'
-
-
-# Soundcast run used to build target distributions as inputs for populationsim
-#land_use_path: 'R:\e2projects_two\SoundCast\Inputs\dev\landuse\2050\test_2050'
+output_dir: 'C:\Users\bnichols\Documents\soundcast_landuse_scenario_builder\example'
 
 update_jobs: True
 update_hh: True
