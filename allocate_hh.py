@@ -23,29 +23,47 @@ import sys
 import yaml
 import subprocess
 import h5py
+from pathlib import Path
 
 # Copy user inputs to and set up populationsim directory
 config = yaml.safe_load(open("config.yaml"))
-shutil.copyfile(os.path.join(config['data_dir'],'geo_cross_walk.csv'), 'Populationsim/data/geo_cross_walk.csv')
-if not os.path.isdir(r'PopulationSim/output'):
-    os.mkdir(r'PopulationSim/output')
+popsim_run_dir_path = Path(config['output_dir'])
+shutil.copyfile('populationsim_settings.yaml', popsim_run_dir_path/'configs'/'settings.yaml')
+shutil.copyfile('controls.csv', popsim_run_dir_path/'configs'/'controls.csv')
+
+# Set up other paths
+land_use_path = Path(config['input_land_use_path'])
+
+# Update controls with allocation file before running popsim:
+if config['update_hh']:
+    df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
+    df = pd.read_csv(popsim_run_dir_path/'data'/'future_controls.csv')
+    df = df.merge(df_allocate[['taz_id','households']], how='left', on='taz_id')
+    df['hh_taz_weight'] = df['households'].copy()
+df.fillna(0, inplace = True)
+df.drop(['households'], axis=1, inplace=True)
+
+## Enforce integers
+df = df.astype('int')
+df.to_csv(popsim_run_dir_path/'data'/'future_controls.csv', index=False)
+
 
 # Run populationsim with controls for study area
-returncode = subprocess.call([sys.executable, 'PopulationSim/run_populationsim.py', '-w', 'Populationsim'])
+returncode = subprocess.call([sys.executable, 'run_populationsim.py', '-w', config['output_dir']])
 if returncode != 0:
     sys.exit(1)
 
-config = yaml.safe_load(open("config.yaml"))
+#config = yaml.safe_load(open("config.yaml"))
 soundcast_inputs_dir = 'results'
 
 # Load data
-parcels = pd.read_csv(os.path.join(config['land_use_path'],'parcels_urbansim.txt'),  delim_whitespace=True)
-synth_hhs = pd.read_csv(r'PopulationSim\output\synthetic_households.csv')
-synth_persons = pd.read_csv(r'PopulationSim\output\synthetic_persons.csv')
+parcels = pd.read_csv(land_use_path/'parcels_urbansim.txt', delim_whitespace=True)
+synth_hhs = pd.read_csv(popsim_run_dir_path/'output'/'synthetic_households.csv')
+synth_persons = pd.read_csv(popsim_run_dir_path/'output'/'synthetic_persons.csv')
 
 # Load persons and households table from model run
 # This file will be modified/replaced by new results from synthetic households 
-myh5 = h5py.File( os.path.join(config['model_dir'],r'inputs/scenario/landuse/hh_and_persons.h5'),'r')
+myh5 = h5py.File(land_use_path/'hh_and_persons.h5','r')
 old_h5_hh = pd.DataFrame()
 for col in myh5['Household'].keys():
     old_h5_hh[col] = myh5['Household'][col][:]
@@ -92,14 +110,14 @@ new_parcel_df.drop('new_hh', axis=1, inplace=True)
 
 # Update employment
 if config['update_jobs']:
-    df_allocate = pd.read_csv(os.path.join(config['input_dir'],r'allocation.csv'))
+    df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
     df_list = []
-    for taz in df_allocate['zone_id'].unique():
+    for taz in df_allocate['taz_id'].unique():
         # Select all parcels in the zones
         df = new_parcel_df[new_parcel_df['taz_p'] == taz]
 
         # Scale the jobs based on existing distribution across sectors
-        new_total = df_allocate[df_allocate['zone_id'] == taz]['employment']
+        new_total = df_allocate[df_allocate['taz_id'] == taz]['employment']
         emp_factor = (new_total/df['emptot_p'].sum()).values[0]
         emp_cols = ['empedu_p', 'empfoo_p', 'empgov_p', 'empind_p', 'empmed_p','empofc_p', 'empoth_p', 'empret_p', 'emprsc_p', 'empsvc_p']
         new_parcel_df.loc[df.index, emp_cols] = (df[emp_cols]*emp_factor).round()
@@ -108,9 +126,7 @@ if config['update_jobs']:
 # Update parcel columns with these new totals
 new_parcel_df['emptot_p'] = new_parcel_df[emp_cols].sum(axis=1)
 
-if not os.path.exists(soundcast_inputs_dir):
-    os.mkdir(soundcast_inputs_dir)
-new_parcel_df.to_csv(os.path.join(soundcast_inputs_dir,'parcels_urbansim.txt'), sep=' ', index=False)
+new_parcel_df.to_csv(popsim_run_dir_path/'output'/'parcels_urbansim.txt', sep=' ', index=False)
 
 #############################
 # Update Household attributes
@@ -151,7 +167,7 @@ df_hh['hhexpfac'] = 1.0
 
 # columns required: pagey, pgend, pno, pptyp, pwtyp, pstyp
 empty_fields = ['pdairy','ppaidprk','pspcl','pstaz','ptpass','puwarrp',
-                'puwdepp','puwmode','pwpcl','pwtaz']
+                'puwdepp','puwmode','pwpcl','pwtaz','prace']
 new_person_df = synth_persons.copy()
 
 # Set empty fields to -1 and psexpfac to 1.0
@@ -188,6 +204,26 @@ new_person_df.loc[(new_person_df['pstyp'] > 0) &
 new_person_df.loc[(new_person_df['pagey'] >= 5) & (new_person_df['pagey'] < 16), 'pptyp'] = 7     # Child age 5-15
 new_person_df.loc[(new_person_df['pagey'] < 5) & (new_person_df['pagey'] < 16), 'pptyp'] = 8    # Child age 0-4
 
+# Race
+# white_non_hispanic 
+new_person_df.loc[(new_person_df.RAC1P == 1) & (new_person_df.HISP<2), 'prace'] = 1
+# black_non_hispanic
+new_person_df.loc[(new_person_df.RAC1P == 2) & (new_person_df.HISP<2), 'prace'] = 2
+# asian_non_hispanic
+new_person_df.loc[(new_person_df.RAC1P==6) & (new_person_df.HISP<2), 'prace'] = 3
+# other_non_hispanic
+new_person_df.loc[(new_person_df.RAC1P != 1) & (new_person_df.RAC1P != 2) & (new_person_df.RAC1P != 6) & (new_person_df.RAC1P != 9) & (new_person_df.HISP<2), 'prace'] = 4
+# two_or_more_races_non_hispanic
+new_person_df.loc[(new_person_df.RAC1P==9) & (new_person_df.HISP<2), 'prace'] = 5
+# white_hispanic
+new_person_df.loc[(new_person_df.RAC1P == 1) & (new_person_df.HISP>1), 'prace'] = 6
+# non_white_hispanic
+new_person_df.loc[(new_person_df.RAC1P != 1) & (new_person_df.HISP>1), 'prace'] = 7
+
+
+
+
+
 # Get associated household ID
 new_person_df = new_person_df.merge(df_hh[['household_id','hhno']], on='household_id', how='left')
 
@@ -206,7 +242,7 @@ export_person_df = old_h5_person[old_h5_person['hhno'].isin(export_hh_df['hhno']
 export_person_df = export_person_df.append(new_person_df[old_h5_person.columns])
 
 # Write to h5 file
-out_h5 = h5py.File(os.path.join(soundcast_inputs_dir,'hh_and_persons.h5'),'w')
+out_h5 = h5py.File(popsim_run_dir_path/'output'/'hh_and_persons.h5','w')
 for key in ['Person','Household']:
     out_h5.create_group(key)
 for col in export_person_df.columns:
