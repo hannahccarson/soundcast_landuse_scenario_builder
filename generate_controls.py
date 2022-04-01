@@ -51,6 +51,7 @@ def update_df(target_df, target_index, update_df, update_index, col_name):
 
     return target_df
 
+
 def recode(df, col, new_col, bins, labels, group_by_col):
     category = pd.cut(df[col],bins=bins,labels=labels)
     if new_col in df.columns:
@@ -63,12 +64,12 @@ def recode(df, col, new_col, bins, labels, group_by_col):
 config = yaml.safe_load(open("config.yaml"))
 
 # create output dir
-if os.path.exists(config['popsim_run_dir']):
-            shutil.rmtree(config['popsim_run_dir'])
-os.makedirs(config['popsim_run_dir'])
+if os.path.exists(config['output_dir']):
+            shutil.rmtree(config['output_dir'])
+os.makedirs(config['output_dir'])
 
 # Setup paths
-popsim_run_dir_path = Path(config['popsim_run_dir'])
+popsim_run_dir_path = Path(config['output_dir'])
 land_use_path = Path(config['input_land_use_path'])
 pums_path = Path(config['input_pums_data_path'])
 gis_path = Path(config['input_gis_data_path'])
@@ -162,7 +163,6 @@ col_list.append(recode(study_area_hhs, 'hhwkrs', 'num_workers', [-1, 0, 1, 2, 99
 col_list.append(recode(study_area_hhs, 'hhincome', 'income_cat', [-1, 15000, 30000, 60000, 100000, 999999999], 
                        ['income_lt15','income_gt15-lt30', 'income_gt30-lt60', 'income_gt60-lt100', 'income_gt100'], 'taz_id'))
 
-
 # Person categories
 # Total persons
 col_list.append(pd.DataFrame(study_area_persons.groupby('taz_id').size(), columns = ['pers_taz_weight']))
@@ -175,6 +175,10 @@ col_list.append(recode(study_area_persons, 'pagey', 'age', [-1, 19, 35, 60, 999]
                        ['age_19_and_under', 'age_20_to_35', 'age_35_to_60', 'age_above_60'], 'taz_id'))
 # Worker status
 col_list.append(recode(study_area_persons, 'pwtyp', 'worker', [0, 999], ['is_worker'], 'taz_id'))
+
+# Race
+col_list.append(recode(study_area_persons, 'prace', 'num_hh', [0, 1, 2, 3, 4, 5, 6, 200], 
+                       ['white_non_hispanic', 'black_non_hispanic', 'asian_non_hispanic', 'other_non_hispanic', 'two_or_more_races_non_hispanic', 'white_hispanic', 'non_white_hispanic'], 'taz_id'))
 
 df = pd.concat(col_list, axis = 1)
 df.reset_index(inplace = True)

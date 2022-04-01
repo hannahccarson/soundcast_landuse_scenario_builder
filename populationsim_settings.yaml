@@ -97,6 +97,13 @@ output_synthetic_population:
   persons:
     filename: synthetic_persons.csv
     columns:
+      - white_hispanic
+      - non_white_hispanic
+      - white_non_hispanic
+      - black_non_hispanic
+      - other_non_hispanic
+      - asian_non_hispanic
+      - two_or_more_races_non_hispanic
       - AGEP
       - SEX
       - SCH
@@ -104,9 +111,9 @@ output_synthetic_population:
       - hh_id
       - per_num
       - RAC1P
+      - HISP
       - WKHP
       - SCHG
-
 
 # Steps for base mode
 # ------------------------------------------------------------------
