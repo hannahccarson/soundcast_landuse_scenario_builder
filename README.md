@@ -50,22 +50,21 @@ The first to be run is **generate_controls.py**. After populating input director
      python generate_controls.py
 
 This script generates the necessary inputs to generate the synthetic household and population files for a defined study area. Based on zones included in the GeoDatabase, a set of PopulationSim control files and other inputs are generated. Seed records are selected from the study area and used to produce the refined synthetic populations. The outputs from this process will be available in the location specified in 'output_dir' in config.yaml, and will include the following:
-    - configs
-    - data
+    - configs: files used internally by populationsim
+    - data: populationsim inputs
+        - **user_allocation.csv**: primary file that users will edit, described below
+        - future_controls.csv: detailed file that describes zone-level control totals for populationsim. 
     - output
-        - all outputs of populationsim and this tool, including
-     - future_controls.csv: primary control totals for all controlled variables within the study area. 
-         - Users can edit the **hh_taz_weight** field to change the total number of households per zone. 
-     - geo_cross_walk.csv: geographic relationship between input zones and PUMAs (relating the seed files to the study area)
-     - seed_households.csv: subset of seed households located within the study area; only these will be used to run PopulationSim in the next step
-     - seed_persons.csv: subset of seed persons 
+        - all outputs of populationsim and this tool, which will be available after running the next script
+        
+The **user_allocation.csv** file is the main control of total households and jobs by zone. Users should change totals only for zones they wish to update. 
      
 ### Allocate Households
 The second script to be run is **allocate_hh.py**. 
 
     python allocate_hh.py
     
-This script uses the outputs of *generate_controls.py* to run PopulationSim and update Soundcast inputs with edited zone-level controls. The inputs required for this script are the outputs from the previous script. This script directly calls PopulationSim, which produces a set of synthetic household and person files for the study area. These synthetic data replace existing houeshold and person data for these zones and are written to file for use in a new Soundcast scenario run. Final outputs are available in the **results** folder:
+This script uses the outputs of *generate_controls.py* to run PopulationSim and update Soundcast inputs with edited zone-level controls. The inputs required for this script are the outputs from the previous script. This script directly calls PopulationSim, which produces a set of synthetic household and person files for the study area. These synthetic data replace existing houeshold and person data for these zones and are written to file for use in a new Soundcast scenario run. Final outputs are available in the **output** folder:
 - parcels_urbansim.txt: Soundcast parcel-level landuse file, updated for total number of households per parcel
 - hh_and_persons.h5: Soundcast synthetic household and person data, updated to reflect land use changes. 
     
