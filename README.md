@@ -49,6 +49,7 @@ The first to be run is **generate_controls.py**. After populating input director
      python generate_controls.py
 
 This script generates the necessary inputs to generate the synthetic household and population files for a defined study area. Based on zones included in the GeoDatabase, a set of PopulationSim control files and other inputs are generated. Seed records are selected from the study area and used to produce the refined synthetic populations. The outputs from this process will be available in the location specified in 'output_dir' in config.yaml, and will include the following:
+
     - configs: files used internally by populationsim
     - data: populationsim inputs
         - **user_allocation.csv**: primary file that users will edit, described below
