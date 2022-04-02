@@ -16,7 +16,7 @@ After installing this environment, activate it as follows. This environment must
 
 ## Inputs
 
-The tool requires standard inputs. [Users can download example input data that here.](https://file.ac/zMj1JWnmnGg/). Each of the following folder locations must be specified in config.yaml.
+The tool requires standard inputs. [Users can download example input data here](https://file.ac/zMj1JWnmnGg/). Each of the following folder locations must be specified in config.yaml.
 - land_use
      - hh_and_persons.h5: existing Soundcast synthetic household and population file
      - parcels_urbansim.txt: Soundcast land use file to be used for distribution controls 
