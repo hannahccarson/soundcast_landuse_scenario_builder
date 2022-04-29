@@ -71,7 +71,9 @@ This script generates the necessary inputs to generate the synthetic household a
 - output
     - all outputs of populationsim and this tool, which will be available after running the next script
         
-The **user_allocation.csv** file is the main control of total households and jobs by zone. Users should change totals only for zones they wish to update. 
+The **user_allocation.csv** file is the main control of total households and jobs by zone. Users should change totals only for zones they wish to update. The list of zones in this file is built based on the inputs specified in the input geodatabase.
+
+For users that wish to review or edit the more detailed population control totals, see the future_controls.csv file. The script automatically updates this file with household and person totals from user_allocation.csv, but if the user need to change additional distributions they can do so in this file. Keep in mind that any changes to household and person totals will be superseded by the data in user_allocation.py.  
      
 ### Allocate Households
 The second script to be run is **allocate_hh.py**. 
