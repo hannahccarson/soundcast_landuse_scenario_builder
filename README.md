@@ -16,23 +16,36 @@ After installing this environment, activate it as follows. This environment must
 
 ## Inputs
 
-The tool requires standard inputs. [Users can download example input data here](https://file.ac/zMj1JWnmnGg/). Each of the following folder locations must be specified in config.yaml.
-- land_use
-     - hh_and_persons.h5: existing Soundcast synthetic household and population file
-     - parcels_urbansim.txt: Soundcast land use file to be used for distribution controls 
+The tool requires standard inputs. [Users can download example input data here](https://file.ac/zMj1JWnmnGg/). Unzip these folders to a convenient location on your local machine. For example purposes, we will assume the data has been extracted to `C:\users\test\landuse_scenario_test`. Each of the following paths must then be specified in **config.yaml** in this repository.
+
+### Configuring Inputs
+Once data has been provided, the location of this data must be specified in config.yaml. The following input locations must be updated by the user before running.
+
+- input_land_use_path
+  - Soundcast parcel and synthetic population files. 
+     - The parcel file (parcels_urbansim.txt) will be used to allocate households from TAZ-level controls to parcels. The parcel file used here will determine the spatial detail of any changes to land use at a zone level and will ensure results are based on some desired distribution. For instance, using a 2050 parcel file with PSRC's Vision 2050 policies will ensure that households and jobs are distributed across zones with this same policy reference, even with changes in zone-level totals. 
+     - If the tool is being run for only a portion of the region (a specific study area), the synthetic household and persons data (hh_and_persons.h5) will be updated with any changes, leaving all other houesholds and persons the same. The user must specify this with the variable *update_existing_h5*. When True, the data from this input hh_and_persons.h5 will be copied and updated where appropriate. When False, an entirely new synthetic population file will be generated, which should only be done when performing a regional-scale analysis. 
+- input_pums_data_path
+  - should include PUMS person and household records; these are the files that will be closed by populationsim to produce a synthetic population
+      - seed_household.csv
+      - seed_persons.csv
+- input_gis_data_path
+  - a geodatabase
+
+For the example data, these should be set as follows (updating to your local data directory where appropriate)
+- input_land_use_path: <C:\users\test\landuse_scenario_test\>land_use\2050
+- input_pums_data_path: <C:\users\test\landuse_scenario_test\>pums_data
+- input_gis_data_path: <C:\users\test\landuse_scenario_test\>gis_data.gdb
+
 - pums_data
     - seed_household.csv: PUMS seed household records; these seed households are replicated by PopulationSim to match zonal demographic distributions
     - seed_persons.csv: PUMS seed person records
-- gis_data.gdb: geodatabase containing zone shapefile of zones that are to be changed. 
+- gis_data.gdb: 
 
 Note that in the [provided example data](https://file.ac/zMj1JWnmnGg/) the land_use folder contains a "2050" sub-directory. This designates this data as 2050. Users can add additional years or scenarios here and should update the config setting "input_land_use_path" to full path of the desired directory.
 
-### Configuring Inputs
-Once data has been provided, the location of this data must be specified in config.yaml. The following input locations must be updated by the user before running:
 
-- input_land_use_path
-- input_pums_data_path
-- input_gis_data_path
+
 
 Users must also update the **'output_dir'** field to specify where the outputs and intermediate data should be stored.
 
