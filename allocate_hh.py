@@ -123,11 +123,11 @@ new_parcel_df['hh_p'] = new_parcel_df['hh_p'].fillna(0)
 
 new_parcel_df.drop('new_hh', axis=1, inplace=True)
 
+emp_cols = ['empedu_p', 'empfoo_p', 'empgov_p', 'empind_p', 'empmed_p','empofc_p', 'empoth_p', 'empret_p', 'emprsc_p', 'empsvc_p']
+
 # Update employment
 if config['update_jobs']:
     df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
-
-    emp_cols = ['empedu_p', 'empfoo_p', 'empgov_p', 'empind_p', 'empmed_p','empofc_p', 'empoth_p', 'empret_p', 'emprsc_p', 'empsvc_p']
     
     # if no existing jobs in a TAZ use regional job distribution across sectors
     regional_sector_distribution = new_parcel_df[emp_cols].sum()/new_parcel_df['emptot_p'].sum()
