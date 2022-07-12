@@ -12,7 +12,7 @@ This repository includes an Anaconda environment with all required libraries to 
     
 After installing this environment, activate it as follows. This environment must be activated every time a new prompt is opened.
     
-    conda activate scenario_landuse
+    conda activate soundcast_landuse
 
 ## Inputs
 

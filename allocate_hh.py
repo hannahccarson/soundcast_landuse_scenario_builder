@@ -29,23 +29,33 @@ from pathlib import Path
 config = yaml.safe_load(open("config.yaml"))
 popsim_run_dir_path = Path(config['output_dir'])
 shutil.copyfile('populationsim_settings.yaml', popsim_run_dir_path/'configs'/'settings.yaml')
+#shutil.copyfile('populationsim_settings_mp.yaml', popsim_run_dir_path/'configs'/'settings_mp.yaml')
 shutil.copyfile('controls.csv', popsim_run_dir_path/'configs'/'controls.csv')
 
 # Set up other paths
 land_use_path = Path(config['input_land_use_path'])
 
-# Update controls with allocation file before running popsim:
-if config['update_hh']:
+# Update controls from allocation file before running popsim:
+if config['update_hh'] or config['update_person']:
     df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
     df = pd.read_csv(popsim_run_dir_path/'data'/'future_controls.csv')
-    df = df.merge(df_allocate[['taz_id','households']], how='left', on='taz_id')
-    df['hh_taz_weight'] = df['households'].copy()
-df.fillna(0, inplace = True)
-df.drop(['households'], axis=1, inplace=True)
+    col_list = ['taz_id']
+    if config['update_hh']:
+        col_list += ['households']
+    if config['update_persons']:
+        col_list += ['persons']
+    df = df_allocate[col_list].merge(df, how='left', on='taz_id')   # Join only zones from user_allocation.csv
+    if config['update_hh']:
+        df['hh_taz_weight'] = df['households'].copy()
+        df.drop(['households'], axis=1, inplace=True)
+    if config['update_persons']:
+        df['pers_taz_weight'] = df['persons'].copy()
+        df.drop(['persons'], axis=1, inplace=True)
 
-## Enforce integers
-df = df.astype('int')
-df.to_csv(popsim_run_dir_path/'data'/'future_controls.csv', index=False)
+    ## Enforce integers
+    df.fillna(0, inplace = True)
+    df = df.astype('int')
+    df.to_csv(popsim_run_dir_path/'data'/'future_controls.csv', index=False)
 
 
 # Run populationsim with controls for study area
@@ -53,8 +63,6 @@ returncode = subprocess.call([sys.executable, 'run_populationsim.py', '-w', conf
 if returncode != 0:
     sys.exit(1)
 
-#config = yaml.safe_load(open("config.yaml"))
-soundcast_inputs_dir = 'results'
 
 # Load data
 parcels = pd.read_csv(land_use_path/'parcels_urbansim.txt', delim_whitespace=True)
@@ -102,15 +110,28 @@ new_parcel_hhs_total = hh_parcels_df['parcelid'].value_counts()
 # Update Parcel file
 #############################
 new_parcel_df = parcels.copy()
-df = pd.DataFrame(new_parcel_hhs_total, columns=['new_hh'])
+df = pd.DataFrame(new_parcel_hhs_total)
+df.columns = ['new_hh']
 df.index.name = 'parcelid'
 new_parcel_df = new_parcel_df.merge(df, left_on='parcelid', right_index=True, how='left')
-new_parcel_df['hh_p'] = new_parcel_df['new_hh'].fillna(new_parcel_df['hh_p'])
+# Replace parcel totals only parcels in zones specified in user_allocation input
+df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
+row_filter = new_parcel_df['taz_p'].isin(df_allocate['taz_id'])
+
+new_parcel_df.loc[row_filter, 'hh_p'] = new_parcel_df['new_hh']
+new_parcel_df['hh_p'] = new_parcel_df['hh_p'].fillna(0)
+
 new_parcel_df.drop('new_hh', axis=1, inplace=True)
+
+emp_cols = ['empedu_p', 'empfoo_p', 'empgov_p', 'empind_p', 'empmed_p','empofc_p', 'empoth_p', 'empret_p', 'emprsc_p', 'empsvc_p']
 
 # Update employment
 if config['update_jobs']:
     df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
+    
+    # if no existing jobs in a TAZ use regional job distribution across sectors
+    regional_sector_distribution = new_parcel_df[emp_cols].sum()/new_parcel_df['emptot_p'].sum()
+
     df_list = []
     for taz in df_allocate['taz_id'].unique():
         # Select all parcels in the zones
@@ -118,13 +139,29 @@ if config['update_jobs']:
 
         # Scale the jobs based on existing distribution across sectors
         new_total = df_allocate[df_allocate['taz_id'] == taz]['employment']
-        emp_factor = (new_total/df['emptot_p'].sum()).values[0]
-        emp_cols = ['empedu_p', 'empfoo_p', 'empgov_p', 'empind_p', 'empmed_p','empofc_p', 'empoth_p', 'empret_p', 'emprsc_p', 'empsvc_p']
-        new_parcel_df.loc[df.index, emp_cols] = (df[emp_cols]*emp_factor).round()
-        # Note: the exact totals will not perfectly match the emptot_p specified, but will be generally close
+        if df['emptot_p'].sum() > 0:
+            emp_factor = (new_total/df['emptot_p'].sum()).values[0]
+            new_parcel_df.loc[df.index, emp_cols] = (df[emp_cols]*emp_factor).round()
+            # Note: the exact totals will not perfectly match the emptot_p specified, but will be generally close
+        else:
+            # Assume regional section distribution
+            sector_jobs = (new_total.values[0]*regional_sector_distribution).round()
+            # Assume equal parcel distribution if no other information; randomly places jobs by sector across parcels
+            # Get a random set of indeces of length equal to jobs in that sector
+            for col in emp_cols:
+                # Sample randomly with replacement (in case there are more jobs than parcels)
+                test_df = new_parcel_df.loc[df.index, col].sample(int(sector_jobs[col]), replace=True)
+                new_parcel_df.loc[df.index, col] = test_df.index.value_counts()
+
+
 
 # Update parcel columns with these new totals
 new_parcel_df['emptot_p'] = new_parcel_df[emp_cols].sum(axis=1)
+new_parcel_df[emp_cols] = new_parcel_df[emp_cols].fillna(0)
+
+# Integerize all cols
+int_cols = new_parcel_df.columns.drop(['xcoord_p','ycoord_p'])
+new_parcel_df[int_cols] = new_parcel_df[int_cols].astype('int')
 
 new_parcel_df.to_csv(popsim_run_dir_path/'output'/'parcels_urbansim.txt', sep=' ', index=False)
 
@@ -157,7 +194,8 @@ df_hh = df_hh.merge(parcels[['parcelid','sfunits','mfunits']], left_on='hhparcel
 df_hh['hrestype'] = 1    # Default of single family residence
 df_hh.loc[df_hh['mfunits'] > df_hh['sfunits'],'hrestype'] = 3    # condo/apartment
 
-df_hh['hhexpfac'] = 1.0
+df_hh['hhexpfac'] = 1
+df_hh[['hrestype','hownrent']] = -1
 
 ########################
 # Update person attributes
@@ -191,6 +229,8 @@ new_person_df.loc[(new_person_df['WKHP'] < 35) & (new_person_df['WKHP'] > 0) ,'p
 new_person_df.loc[new_person_df['SCH'] == 1, 'pstyp'] = 0    # Not a student
 new_person_df.loc[((new_person_df['SCH'] > 1) & (new_person_df['pwtyp'].isin([0,2]))), 'pstyp'] = 1    # student & not a full-time worker -> full-time student
 new_person_df.loc[((new_person_df['SCH'] > 1) & (new_person_df['pwtyp'] == 1)), 'pstyp'] = 2    # student & full-time job -> part-time student
+# If no SCH information, set to 0 (not a student); this occurs for people of pagey 0-2
+new_person_df.loc[new_person_df['SCH'] == 0, 'pstyp'] = 0
 
 # Person type, based on employment, age, school status
 new_person_df.loc[new_person_df['pwtyp'] == 1, 'pptyp'] = 1    # Full time worker
@@ -220,34 +260,38 @@ new_person_df.loc[(new_person_df.RAC1P == 1) & (new_person_df.HISP>1), 'prace'] 
 # non_white_hispanic
 new_person_df.loc[(new_person_df.RAC1P != 1) & (new_person_df.HISP>1), 'prace'] = 7
 
-
-
-
-
 # Get associated household ID
 new_person_df = new_person_df.merge(df_hh[['household_id','hhno']], on='household_id', how='left')
 
 ####################
 # Write results to H5
 ####################
-# 
-# Remove all households/persons from affected areas and replace with 
-# newly synthesized data
-export_hh_df = old_h5_hh[~old_h5_hh['hhtaz'].isin(df_hh['hhtaz'])]
-df_hh[['hrestype','hownrent']] = -1
-export_hh_df = export_hh_df.append(df_hh[export_hh_df.columns])
 
-# Select persons from households within the final export list
-export_person_df = old_h5_person[old_h5_person['hhno'].isin(export_hh_df['hhno'])]
-export_person_df = export_person_df.append(new_person_df[old_h5_person.columns])
+# When working with a small study area, only household and person records in study area will be updated
+# Existing records from hh_persons.h5 from other areas will be unchanged
+# In cases where we want to update a full region we can turn this off and export all records as a new h5
+if config['update_existing_h5']:    
+    export_hh_df = old_h5_hh[~old_h5_hh['hhtaz'].isin(df_hh['hhtaz'])]
+    export_hh_df = export_hh_df.append(df_hh[export_hh_df.columns])
+
+    # Select persons from households within the final export list
+    export_person_df = old_h5_person[old_h5_person['hhno'].isin(export_hh_df['hhno'])]
+    export_person_df = export_person_df.append(new_person_df[old_h5_person.columns])
+else:
+    export_hh_df = df_hh.copy()
+    export_person_df = new_person_df.copy()
 
 # Write to h5 file
+# Delete file if exists
+if os.path.exists(popsim_run_dir_path/'output'/'hh_and_persons.h5'):
+    os.remove(popsim_run_dir_path/'output'/'hh_and_persons.h5')
+
 out_h5 = h5py.File(popsim_run_dir_path/'output'/'hh_and_persons.h5','w')
 for key in ['Person','Household']:
     out_h5.create_group(key)
-for col in export_person_df.columns:
-    out_h5['Person'][col] = export_person_df[col]
-for col in export_hh_df.columns:
-    out_h5['Household'][col] = export_hh_df[col]
+for col in myh5['Person'].keys():
+    out_h5['Person'][col] = export_person_df[col].astype('int').values
+for col in myh5['Household'].keys():
+    out_h5['Household'][col] = export_hh_df[col].astype('int').values
 
 out_h5.close()
