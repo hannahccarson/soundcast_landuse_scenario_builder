@@ -184,23 +184,25 @@ df.reset_index(inplace = True)
 #df.rename(columns={config['taz_id']:'taz_id'}, inplace = True)
 df['taz_id'] = df['taz_id'].astype('int64')
 
+# For zones in the study area that have no synthetic household data use an average of households in the study area
+unpopulated_tazs = taz_study_area[~taz_study_area.taz_id.isin(df.taz_id)][['taz_id']]
+
+df['imputed_regional_dist'] = 0    # Flag to identify this zone had no controled distribution
+unpopulated_tazs['imputed_regional_dist'] = 1
+df = df.append(unpopulated_tazs)
+df = df.sort_values('taz_id')
+df = df.drop_duplicates()
 
 # Define household totals from allocation file
-allocate_df = df[['taz_id', 'hh_taz_weight']]
-allocate_df.rename(columns={'hh_taz_weight' : 'households'}, inplace = True)
-allocate_df = allocate_df.merge(parcels_gdf.groupby('taz_id')['emptot_p'].sum().reset_index(), how = 'left', on = 'taz_id')
-allocate_df.rename(columns={'emptot_p' : 'employment'}, inplace = True)
-allocate_df.to_csv(popsim_run_dir_path/'data'/'user_allocation.csv', index = False)
+allocate_df = df[['taz_id', 'hh_taz_weight','pers_taz_weight']]
+allocate_df.rename(columns={'hh_taz_weight' : 'households', 'pers_taz_weight': 'persons'}, inplace=True)
+allocate_df = allocate_df.merge(parcels_gdf.groupby('taz_id')['emptot_p'].sum().reset_index(), how='left', on='taz_id')
+allocate_df.rename(columns={'emptot_p' : 'employment'}, inplace=True)
+allocate_df.fillna(0, inplace=True)
+allocate_df = allocate_df.astype('int')
+allocate_df.to_csv(popsim_run_dir_path/'data'/'user_allocation.csv', index=False)
+df.fillna(0, inplace=True)
 
-
-#if config['update_hh']:
-#    df_allocate = pd.read_csv(os.path.join(config['input_dir'],r'allocation.csv'))
-#    df = df.merge(df_allocate[['zone_id','households']], how='left', left_on='taz_id', right_on='zone_id')
-#    df['hh_taz_weight'] = df['households'].copy()
-df.fillna(0, inplace = True)
-#df.drop(['households','zone_id'], axis=1, inplace=True)
-#if not os.path.isdir(r'PopulationSim/data'):
-#    os.mkdir(r'PopulationSim/data')
 ## Enforce integers
 df = df.astype('int')
 df.to_csv(popsim_run_dir_path/'data'/'future_controls.csv', index=False)
