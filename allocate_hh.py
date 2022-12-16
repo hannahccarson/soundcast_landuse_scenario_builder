@@ -44,7 +44,25 @@ if config['update_hh'] or config['update_person']:
         col_list += ['households']
     if config['update_persons']:
         col_list += ['persons']
+
     df = df_allocate[col_list].merge(df, how='left', on='taz_id')   # Join only zones from user_allocation.csv
+
+    # for zones without existing distributions and user-specified targets, use regional averages
+    update_tazs = df.loc[(df['imputed_regional_dist'] == 1) & 
+                     (df['households'] > 0)]['taz_id']
+    
+    # Use average household size of 2.0 if number of persons not specified in user_allocation.csv
+    df.loc[(df['taz_id'].isin(update_tazs)) &(df['persons'] == 0), 'persons'] = df['households']*2.0
+
+    # regional household totals for control calculations
+    tot_hh = df.loc[~df['taz_id'].isin(update_tazs), 'hh_taz_weight'].sum()
+    tot_person = df.loc[~df['taz_id'].isin(update_tazs), 'pers_taz_weight'].sum()
+
+    for col in config['household_cols']:
+        df.loc[df['taz_id'].isin(update_tazs), col] = (df['households']*(df[col].sum()/tot_hh)).astype('int')
+    for col in config['person_cols']:
+        df.loc[df['taz_id'].isin(update_tazs), col] = (df['persons']*(df[col].sum()/tot_person)).astype('int')
+
     if config['update_hh']:
         df['hh_taz_weight'] = df['households'].copy()
         df.drop(['households'], axis=1, inplace=True)
@@ -57,12 +75,10 @@ if config['update_hh'] or config['update_person']:
     df = df.astype('int')
     df.to_csv(popsim_run_dir_path/'data'/'future_controls.csv', index=False)
 
-
 # Run populationsim with controls for study area
 returncode = subprocess.call([sys.executable, 'run_populationsim.py', '-w', config['output_dir']])
 if returncode != 0:
     sys.exit(1)
-
 
 # Load data
 parcels = pd.read_csv(land_use_path/'parcels_urbansim.txt', delim_whitespace=True)
@@ -110,49 +126,49 @@ new_parcel_hhs_total = hh_parcels_df['parcelid'].value_counts()
 # Update Parcel file
 #############################
 new_parcel_df = parcels.copy()
-df = pd.DataFrame(new_parcel_hhs_total)
-df.columns = ['new_hh']
+df = pd.DataFrame(new_parcel_hhs_total, columns=['new_hh'])
 df.index.name = 'parcelid'
 new_parcel_df = new_parcel_df.merge(df, left_on='parcelid', right_index=True, how='left')
-# Replace parcel totals only parcels in zones specified in user_allocation input
-df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
-row_filter = new_parcel_df['taz_p'].isin(df_allocate['taz_id'])
-
-new_parcel_df.loc[row_filter, 'hh_p'] = new_parcel_df['new_hh']
-new_parcel_df['hh_p'] = new_parcel_df['hh_p'].fillna(0)
-
+new_parcel_df['hh_p'] = new_parcel_df['new_hh'].fillna(new_parcel_df['hh_p'])
 new_parcel_df.drop('new_hh', axis=1, inplace=True)
-
-emp_cols = ['empedu_p', 'empfoo_p', 'empgov_p', 'empind_p', 'empmed_p','empofc_p', 'empoth_p', 'empret_p', 'emprsc_p', 'empsvc_p']
 
 # Update employment
 if config['update_jobs']:
     df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
-    
-    # if no existing jobs in a TAZ use regional job distribution across sectors
-    regional_sector_distribution = new_parcel_df[emp_cols].sum()/new_parcel_df['emptot_p'].sum()
-
+    df_allocate = df_allocate[df_allocate['employment'] > 0]
+    emp_cols = ['empedu_p', 'empfoo_p', 'empgov_p', 'empind_p', 'empmed_p','empofc_p', 'empoth_p', 'empret_p', 'emprsc_p', 'empsvc_p']
     df_list = []
     for taz in df_allocate['taz_id'].unique():
         # Select all parcels in the zones
         df = new_parcel_df[new_parcel_df['taz_p'] == taz]
 
-        # Scale the jobs based on existing distribution across sectors
-        new_total = df_allocate[df_allocate['taz_id'] == taz]['employment']
         if df['emptot_p'].sum() > 0:
+            # For zones with existing distribution, scale jobs based on existing distribution across sectors
+            new_total = df_allocate[df_allocate['taz_id'] == taz]['employment']
             emp_factor = (new_total/df['emptot_p'].sum()).values[0]
             new_parcel_df.loc[df.index, emp_cols] = (df[emp_cols]*emp_factor).round()
-            # Note: the exact totals will not perfectly match the emptot_p specified, but will be generally close
+            # Note: due to rounding the exact totals will not perfectly match the emptot_p specified, but will be close
         else:
-            # Assume regional section distribution
-            sector_jobs = (new_total.values[0]*regional_sector_distribution).round()
-            # Assume equal parcel distribution if no other information; randomly places jobs by sector across parcels
-            # Get a random set of indeces of length equal to jobs in that sector
-            for col in emp_cols:
-                # Sample randomly with replacement (in case there are more jobs than parcels)
-                test_df = new_parcel_df.loc[df.index, col].sample(int(sector_jobs[col]), replace=True)
-                new_parcel_df.loc[df.index, col] = test_df.index.value_counts()
+            # For zones without any distribution scale jobs across sectors using regional distributions
+            # Use an even distribution across all parcels
+            new_total = df_allocate[df_allocate['taz_id'] == taz]['employment']
 
+            # Iterate through each parcel and sector and assign jobs as uniformly as possible
+            emp_factor = (new_total/new_parcel_df['emptot_p'].sum()).values[0]
+            # FIXME: iterating is slow, but we should only have to use it sparingly since most controls should already work off existing job distributions
+            for col in emp_cols:
+                new_parcel_df[col].fillna(0, inplace=True)
+                # total jobs by sector
+                jobs_to_assign = (new_total*(new_parcel_df[col].sum()/new_parcel_df['emptot_p'].sum())).round().astype('int').values[0]
+                while jobs_to_assign > 0:
+                    if jobs_to_assign <= len(new_parcel_df.loc[new_parcel_df['taz_p'] == taz]):
+                        # Fewer or equal jobs than parcels in zone; assign jobs to the first parcels in the df
+                        new_parcel_df.loc[new_parcel_df[new_parcel_df['taz_p'] == taz][0:jobs_to_assign].index, col] = new_parcel_df[col] + 1
+                        jobs_to_assign = 0
+                    else:
+                        # More jobs than parcels; iterate until all sector jobs are placed
+                        new_parcel_df.loc[new_parcel_df['taz_p'] == taz, col] = new_parcel_df[col] + 1
+                        jobs_to_assign = jobs_to_assign - new_parcel_df.loc[new_parcel_df['taz_p'] == taz, col].sum().astype('int')
 
 
 # Update parcel columns with these new totals

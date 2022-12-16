@@ -9,7 +9,7 @@ seed_person_file: 'seed_persons.csv'
 parcel_file: 'parcels_urbansim.txt'
 synthetic_pop_file: 'hh_and_persons.h5'
 puma_layer: 'pumas_2010'
-taz_layer: 'study_area_taz'
+taz_layer: 'psrc_no_seattle'
 
 # Output dir. This is where the inputs to populationsim will reside. 
 # Warning- this entire directory will be over-written. 
@@ -28,3 +28,16 @@ taz_id: 'taz'
 block_group_id: 'geoid10'
 puma_id: 'pumace10'
 parcel_id: 'parcelid'
+
+household_cols: ['hh_size_1', 'hh_size_2', 'hh_size_3',
+       'hh_size_4', 'hh_size_5', 'hh_size_6', 'hh_size_7_plus', 'workers_0',
+       'workers_1', 'workers_2', 'workers_3_plus', 'income_lt15',
+       'income_gt15-lt30', 'income_gt30-lt60', 'income_gt60-lt100',
+       'income_gt100']
+
+person_cols: ['school_no', 'school_yes', 'male',
+       'female', 'age_19_and_under', 'age_20_to_35', 'age_35_to_60',
+       'age_above_60', 'is_worker', 'white_non_hispanic', 'black_non_hispanic',
+       'asian_non_hispanic', 'other_non_hispanic',
+       'two_or_more_races_non_hispanic', 'white_hispanic',
+       'non_white_hispanic']
