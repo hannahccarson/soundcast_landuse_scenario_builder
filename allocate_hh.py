@@ -29,6 +29,7 @@ from pathlib import Path
 config = yaml.safe_load(open("config.yaml"))
 popsim_run_dir_path = Path(config['output_dir'])
 shutil.copyfile('populationsim_settings.yaml', popsim_run_dir_path/'configs'/'settings.yaml')
+#shutil.copyfile('populationsim_settings_mp.yaml', popsim_run_dir_path/'configs'/'settings_mp.yaml')
 shutil.copyfile('controls.csv', popsim_run_dir_path/'configs'/'controls.csv')
 
 # Set up other paths
@@ -43,7 +44,7 @@ if config['update_hh'] or config['update_person']:
         col_list += ['households']
     if config['update_persons']:
         col_list += ['persons']
-    
+
     df = df_allocate[col_list].merge(df, how='left', on='taz_id')   # Join only zones from user_allocation.csv
 
     # for zones without existing distributions and user-specified targets, use regional averages
@@ -53,16 +54,10 @@ if config['update_hh'] or config['update_person']:
     # Use average household size of 2.0 if number of persons not specified in user_allocation.csv
     df.loc[(df['taz_id'].isin(update_tazs)) &(df['persons'] == 0), 'persons'] = df['households']*2.0
 
-    # Calcualte totals for each column
-    #df_sum = df.sum()
-    #for col in df_sum.index:
-    #    if col != 'taz_id':
-#        unpopulated_tazs[col] = df_sum[col]
-        #df.loc[df['taz_id'].isin(update_tazs)
-
     # regional household totals for control calculations
     tot_hh = df.loc[~df['taz_id'].isin(update_tazs), 'hh_taz_weight'].sum()
     tot_person = df.loc[~df['taz_id'].isin(update_tazs), 'pers_taz_weight'].sum()
+
     for col in config['household_cols']:
         df.loc[df['taz_id'].isin(update_tazs), col] = (df['households']*(df[col].sum()/tot_hh)).astype('int')
     for col in config['person_cols']:

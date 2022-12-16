@@ -116,10 +116,6 @@ parcels_cols.extend(['taz_id', 'PUMA'])
 parcels_gdf = gpd.sjoin(parcels_gdf, taz_study_area, how='inner')
 parcels_gdf = parcels_gdf[[col for col in parcels_cols if col in parcels_gdf.columns]]
 
-# Select block groups that are covered by parcels in study area
-#parcels_gdf = gpd.sjoin(parcels_gdf, block_group_gdf, how='inner')
-#parcels_gdf = parcels_gdf[[col for col in parcels_cols if col in parcels_gdf.columns]]
-
 # Identify PUMA for a TAZ based on centroid location
 taz_points = taz_study_area.copy()
 taz_points.geometry = taz_points.geometry.centroid
