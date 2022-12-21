@@ -189,6 +189,13 @@ df = df.append(unpopulated_tazs)
 df = df.sort_values('taz_id')
 df = df.drop_duplicates()
 
+# Check that all TAZs have parcels; if not these should be purposefully excluded from user_allocation.csv
+_filter = df['taz_id'].isin(parcels_gdf['taz_p'].unique())
+if len(df[~_filter]) > 0:
+    for i in df[~df['taz_id'].isin(parcels_gdf['taz_p'].unique())]['taz_id'].values:
+        print('no parcels for study area zone: ID: ' + str(i))
+    df = df[_filter]
+
 # Define household totals from allocation file
 allocate_df = df[['taz_id', 'hh_taz_weight','pers_taz_weight']]
 allocate_df.rename(columns={'hh_taz_weight' : 'households', 'pers_taz_weight': 'persons'}, inplace=True)
