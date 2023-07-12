@@ -25,6 +25,7 @@ import subprocess
 import h5py
 from pathlib import Path
 
+os.chdir(r'C:\Users\hannah.carson\OneDrive - Resource Systems Group, Inc\PierceCounty\psrc_landuse_allocator\Task_landuse_allocator')
 # Copy user inputs to and set up populationsim directory
 config = yaml.safe_load(open("config.yaml"))
 popsim_run_dir_path = Path(config['output_dir'])
@@ -35,56 +36,70 @@ shutil.copyfile('controls.csv', popsim_run_dir_path/'configs'/'controls.csv')
 # Set up other paths
 land_use_path = Path(config['input_land_use_path'])
 
-# Update controls from allocation file before running popsim:
-if config['update_hh'] or config['update_person']:
-    df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
-    df = pd.read_csv(popsim_run_dir_path/'data'/'future_controls.csv')
-    col_list = ['taz_id']
-    if config['update_hh']:
-        col_list += ['households']
-    if config['update_persons']:
-        col_list += ['persons']
+if not config['allocation_only']:
+    # Update controls from allocation file before running popsim:
+    if config['update_hh'] or config['update_person']:
+        df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
+        df = pd.read_csv(popsim_run_dir_path/'data'/'future_controls.csv')
+        col_list = ['taz_id']
+        if config['update_hh']:
+            col_list += ['households']
+        if config['update_persons']:
+            col_list += ['persons']
 
-    df = df_allocate[col_list].merge(df, how='left', on='taz_id')   # Join only zones from user_allocation.csv
+        df = df_allocate[col_list].merge(df, how='left', on='taz_id')   # Join only zones from user_allocation.csv
 
-    # for zones without existing distributions and user-specified targets, use regional averages
-    update_tazs = df.loc[(df['imputed_regional_dist'] == 1) & 
-                     (df['households'] > 0)]['taz_id']
-    
-    # Use average household size of 2.0 if number of persons not specified in user_allocation.csv
-    df.loc[(df['taz_id'].isin(update_tazs)) &(df['persons'] == 0), 'persons'] = df['households']*2.0
+        # for zones without existing distributions and user-specified targets, use regional averages
+        update_tazs = df['taz_id']
+        
+        # Use average household size of 2.0 if number of persons not specified in user_allocation.csv
+        df.loc[(df['taz_id'].isin(update_tazs)) &(df['persons'] == 0), 'persons'] = df['households']*2.0
 
-    # regional household totals for control calculations
-    tot_hh = df.loc[~df['taz_id'].isin(update_tazs), 'hh_taz_weight'].sum()
-    tot_person = df.loc[~df['taz_id'].isin(update_tazs), 'pers_taz_weight'].sum()
+        # regional household totals for control calculations
+        tot_hh = df.loc[df['taz_id'].isin(update_tazs), 'hh_taz_weight'].sum()
+        tot_person = df.loc[df['taz_id'].isin(update_tazs), 'pers_taz_weight'].sum()
 
-    for col in config['household_cols']:
-        df.loc[df['taz_id'].isin(update_tazs), col] = (df['households']*(df[col].sum()/tot_hh)).astype('int')
-    for col in config['person_cols']:
-        df.loc[df['taz_id'].isin(update_tazs), col] = (df['persons']*(df[col].sum()/tot_person)).astype('int')
+        for col in config['household_cols']:
+            print(col, tot_hh, df[col].sum()/tot_hh)
+            df.loc[df['taz_id'].isin(update_tazs), col] = (df['households']*(df[col].sum()/tot_hh)).astype('int')
+        for col in config['person_cols']:
+            print(col)
+            df.loc[df['taz_id'].isin(update_tazs), col] = (df['persons']*(df[col].sum()/tot_person)).astype('int')
 
-    if config['update_hh']:
-        df['hh_taz_weight'] = df['households'].copy()
-        df.drop(['households'], axis=1, inplace=True)
-    if config['update_persons']:
-        df['pers_taz_weight'] = df['persons'].copy()
-        df.drop(['persons'], axis=1, inplace=True)
+        if config['update_hh']:
+            df['hh_taz_weight'] = df['households'].copy()
+            df.drop(['households'], axis=1, inplace=True)
+        if config['update_persons']:
+            df['pers_taz_weight'] = df['persons'].copy()
+            df.drop(['persons'], axis=1, inplace=True)
 
-    ## Enforce integers
-    df.fillna(0, inplace = True)
-    df = df.astype('int')
-    df.to_csv(popsim_run_dir_path/'data'/'future_controls.csv', index=False)
+        ## Enforce integers
+        df.fillna(0, inplace = True)
+        df = df.astype('int')
+        df.to_csv(popsim_run_dir_path/'data'/'future_controls.csv', index=False)
 
-# Run populationsim with controls for study area
-returncode = subprocess.call([sys.executable, 'run_populationsim.py', '-w', config['output_dir']])
-if returncode != 0:
-    sys.exit(1)
+    # Run populationsim with controls for study area
+    returncode = subprocess.call([sys.executable, 'run_populationsim.py', '-w', config['output_dir']])
+    if returncode != 0:
+        sys.exit(1)
 
 # Load data
 parcels = pd.read_csv(land_use_path/'parcels_urbansim.txt', delim_whitespace=True)
+parcels.columns = [col.lower() for col in parcels.columns]
 synth_hhs = pd.read_csv(popsim_run_dir_path/'output'/'synthetic_households.csv')
 synth_persons = pd.read_csv(popsim_run_dir_path/'output'/'synthetic_persons.csv')
-
+manual_override = False
+if config['allocation_override'] is not None:
+    override = pd.read_csv(popsim_run_dir_path/'..'/config['allocation_override'])
+    override = override.merge(parcels[['parcelid','taz_p']], how = 'left', on = 'parcelid')
+    manual_override = True
+if config['parcel_weights'] is not None:
+    pcl_wgt = pd.read_csv(popsim_run_dir_path/'..'/config['parcel_weights'])
+    pcl_wgt['weight'] = pcl_wgt['weight']
+    parcels = parcels.merge(pcl_wgt, how = 'left', on = 'parcelid')
+    parcels = parcels.fillna(0)
+    parcels['hh_p'] = parcels['hh_p']*(parcels['weight']+1)
+    parcels['hh_p'] = parcels['hh_p'].apply(round)
 # Load persons and households table from model run
 # This file will be modified/replaced by new results from synthetic households 
 myh5 = h5py.File(land_use_path/'hh_and_persons.h5','r')
@@ -107,6 +122,14 @@ for taz in synth_hhs['taz_id'].unique():
     if taz_parcels['hh_p'].sum()==0:
         # if no exisiting HHs in TAZ, assign uniform distribution; one hh for each parcel
         taz_parcels['hh_p'] = 1
+    if manual_override:
+        for parcel in override[override.taz_p == taz].parcelid.unique():
+            parcel_override = taz_df.sample(override.loc[override['parcelid'] == parcel].hh_p.item())
+            parcel_override['parcelid'] = parcel
+            df_list.append(parcel_override)
+            taz_df = taz_df[~(taz_df.household_id.isin(parcel_override.household_id.unique()))]
+            taz_parcels = taz_parcels[~(taz_parcels.parcelid == parcel)]
+            
     # Select all parcels in the TAZ with households 
     taz_parcels = taz_parcels[taz_parcels['hh_p']>0][['taz_p', 'hh_p', 'parcelid']]
     # Create records for each household and parcel
@@ -126,10 +149,12 @@ new_parcel_hhs_total = hh_parcels_df['parcelid'].value_counts()
 # Update Parcel file
 #############################
 new_parcel_df = parcels.copy()
-df = pd.DataFrame(new_parcel_hhs_total, columns=['new_hh'])
+df = pd.DataFrame(new_parcel_hhs_total)
+df.columns = ['new_hh']
 df.index.name = 'parcelid'
 new_parcel_df = new_parcel_df.merge(df, left_on='parcelid', right_index=True, how='left')
-new_parcel_df['hh_p'] = new_parcel_df['new_hh'].fillna(new_parcel_df['hh_p'])
+# new_parcel_df['hh_p'] = new_parcel_df['new_hh'].fillna(new_parcel_df['hh_p'])
+new_parcel_df['hh_p'] = new_parcel_df['new_hh'].fillna(0)
 new_parcel_df.drop('new_hh', axis=1, inplace=True)
 
 # Update employment

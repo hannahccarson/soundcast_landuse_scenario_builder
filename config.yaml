@@ -1,7 +1,7 @@
 # Set data and user input location
-input_land_use_path: 'C:\Workspace\land_use_test\example_small_area\lu_allocation_inputs\land_use\2050'
-input_pums_data_path: 'C:\Workspace\land_use_test\example_small_area\lu_allocation_inputs\pums_data'
-input_gis_data_path: 'C:\Workspace\land_use_test\example_small_area\lu_allocation_inputs\gis_data.gdb'
+input_land_use_path: 'C:\Users\hannah.carson\OneDrive - Resource Systems Group, Inc\PierceCounty\psrc_landuse_allocator\Task_landuse_allocator\lu_allocation_inputs\land_use\base'
+input_pums_data_path: 'C:\Users\hannah.carson\OneDrive - Resource Systems Group, Inc\PierceCounty\psrc_landuse_allocator\Task_landuse_allocator\lu_allocation_inputs\pums_data'
+input_gis_data_path: 'C:\Users\hannah.carson\OneDrive - Resource Systems Group, Inc\PierceCounty\psrc_landuse_allocator\Task_landuse_allocator\lu_allocation_inputs\gis_data.gdb'
 
 # File names. Most likely, these will remain unchanged. 
 seed_hh_file: 'seed_households.csv'
@@ -9,11 +9,11 @@ seed_person_file: 'seed_persons.csv'
 parcel_file: 'parcels_urbansim.txt'
 synthetic_pop_file: 'hh_and_persons.h5'
 puma_layer: 'pumas_2010'
-taz_layer: 'psrc_no_seattle'
+taz_layer: 'study_area_taz_subarea'
 
 # Output dir. This is where the inputs to populationsim will reside. 
 # Warning- this entire directory will be over-written. 
-output_dir: 'C:\Workspace\land_use_test\example_small_area\populationsim_run_dir'
+output_dir: 'C:\Users\hannah.carson\OneDrive - Resource Systems Group, Inc\PierceCounty\psrc_landuse_allocator\Task_landuse_allocator\popsim_output'
 
 # Results for only study area TAZs can be updated if True
 # If False, only synthetic records will be written to h5 file
@@ -24,20 +24,51 @@ update_jobs: True
 update_hh: True
 update_persons: True
 
+#If updating the allocation only, use 'allocation_only': True, otherwise, PopulationSim will be re-run
+#Manual overrides to parcel file can be indicated in 'allocation_override'
+#parcel weighting can be provided in 'parcel_weights'
+allocation_only: True
+allocation_override: 'allocation_override.csv'
+parcel_weights: 'parcel_weights.csv'
+
 taz_id: 'taz'
 block_group_id: 'geoid10'
 puma_id: 'pumace10'
 parcel_id: 'parcelid'
 
-household_cols: ['hh_size_1', 'hh_size_2', 'hh_size_3',
-       'hh_size_4', 'hh_size_5', 'hh_size_6', 'hh_size_7_plus', 'workers_0',
-       'workers_1', 'workers_2', 'workers_3_plus', 'income_lt15',
-       'income_gt15-lt30', 'income_gt30-lt60', 'income_gt60-lt100',
-       'income_gt100']
+household_cols: 
+  - hh_size_1
+  - hh_size_2
+  - hh_size_3
+  - hh_size_4
+  - hh_size_5
+  - hh_size_6
+  - hh_size_7_plus
+  - workers_0
+  - workers_1
+  - workers_2
+  - workers_3_plus
+  - income_lt15
+  - income_gt15-lt30
+  - income_gt30-lt60
+  - income_gt60-lt100
+  - income_gt100
 
-person_cols: ['school_no', 'school_yes', 'male',
-       'female', 'age_19_and_under', 'age_20_to_35', 'age_35_to_60',
-       'age_above_60', 'is_worker', 'white_non_hispanic', 'black_non_hispanic',
-       'asian_non_hispanic', 'other_non_hispanic',
-       'two_or_more_races_non_hispanic', 'white_hispanic',
-       'non_white_hispanic']
+person_cols:
+  - school_no
+  - school_yes
+  - male
+  - female
+  - age_19_and_under
+  - age_20_to_35
+  - age_35_to_60
+  - age_above_60
+  - is_worker
+  - white_non_hispanic
+  - black_non_hispanic
+  - asian_non_hispanic
+  - other_non_hispanic
+  - two_or_more_races_non_hispanic
+  - white_hispanic
+  - non_white_hispanic
+

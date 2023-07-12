@@ -45,6 +45,9 @@ def update_df(target_df, target_index, update_df, update_index, col_name):
     target_df[col_name] = 0
     target_df.set_index(target_index, inplace = True)
     update_df.set_index(update_index, inplace = True)
+    print(col_name)
+    # target_df.to_csv(r'E:\projects\clients\PierceCounty\Tasks\Task_04_Update_Travel_Demand_Models\Task_landuse_allocator\target_df.csv')
+    # update_df.to_csv(r'E:\projects\clients\PierceCounty\Tasks\Task_04_Update_Travel_Demand_Models\Task_landuse_allocator\update_df.csv')
     target_df.update(update_df)
     target_df.reset_index(inplace = True)
     update_df.reset_index(inplace = True)
@@ -97,6 +100,7 @@ else:
     puma_gdf = gpd.read_file(gis_path/config['puma_layer']/'.shp')
     puma_gdf.rename(columns={config['puma_id'] : 'PUMA'}, inplace = True)
 
+taz_study_area = taz_study_area.to_crs({'init':"EPSG:2285"})
 # Load parcel data from Soundcast input as geoDataframe
 parcels_gdf = pd.read_csv(land_use_path/config['parcel_file'], sep = ' ')
 parcels_gdf.columns= parcels_gdf.columns.str.lower()
@@ -115,7 +119,7 @@ parcels_cols = list(parcels_gdf.columns)
 parcels_cols.extend(['taz_id', 'PUMA'])
 parcels_gdf = gpd.sjoin(parcels_gdf, taz_study_area, how='inner')
 parcels_gdf = parcels_gdf[[col for col in parcels_cols if col in parcels_gdf.columns]]
-
+# print(parcels_gdf.columns)
 # Identify PUMA for a TAZ based on centroid location
 taz_points = taz_study_area.copy()
 taz_points.geometry = taz_points.geometry.centroid
@@ -133,8 +137,8 @@ taz_puma_gdf.to_csv(popsim_run_dir_path/'data'/'geo_cross_walk.csv', index=False
 # Build PopulationSim control file from future land use
 # Distribution of household and person characteristics will be applied to any change in totals
 study_area_hhs = hh[hh['hhparcel'].isin(parcels_gdf[config['parcel_id']])]
-study_area_hhs = update_df(study_area_hhs, 'hhparcel', parcels_gdf, config['parcel_id'], 'taz_id')
-
+# study_area_hhs = update_df(study_area_hhs, 'hhparcel', parcels_gdf, config['parcel_id'], 'taz_id')
+study_area_hhs['taz_id'] = study_area_hhs['hhtaz']
 study_area_persons = persons[persons['hhno'].isin(study_area_hhs['hhno'])]
 study_area_persons = update_df(study_area_persons, 'hhno', study_area_hhs, 'hhno', 'taz_id')
 
@@ -180,31 +184,14 @@ df.reset_index(inplace = True)
 #df.rename(columns={config['taz_id']:'taz_id'}, inplace = True)
 df['taz_id'] = df['taz_id'].astype('int64')
 
-# For zones in the study area that have no synthetic household data use an average of households in the study area
-unpopulated_tazs = taz_study_area[~taz_study_area.taz_id.isin(df.taz_id)][['taz_id']]
-
-df['imputed_regional_dist'] = 0    # Flag to identify this zone had no controled distribution
-unpopulated_tazs['imputed_regional_dist'] = 1
-df = df.append(unpopulated_tazs)
-df = df.sort_values('taz_id')
-df = df.drop_duplicates()
-
-# Check that all TAZs have parcels; if not these should be purposefully excluded from user_allocation.csv
-_filter = df['taz_id'].isin(parcels_gdf['taz_p'].unique())
-if len(df[~_filter]) > 0:
-    for i in df[~df['taz_id'].isin(parcels_gdf['taz_p'].unique())]['taz_id'].values:
-        print('no parcels for study area zone: ID: ' + str(i))
-    df = df[_filter]
-
-# Define household totals from allocation file
+# Define household totals from allocation fil
 allocate_df = df[['taz_id', 'hh_taz_weight','pers_taz_weight']]
-allocate_df.rename(columns={'hh_taz_weight' : 'households', 'pers_taz_weight': 'persons'}, inplace=True)
-allocate_df = allocate_df.merge(parcels_gdf.groupby('taz_id')['emptot_p'].sum().reset_index(), how='left', on='taz_id')
-allocate_df.rename(columns={'emptot_p' : 'employment'}, inplace=True)
-allocate_df.fillna(0, inplace=True)
-allocate_df = allocate_df.astype('int')
-allocate_df.to_csv(popsim_run_dir_path/'data'/'user_allocation.csv', index=False)
-df.fillna(0, inplace=True)
+allocate_df.rename(columns={'hh_taz_weight' : 'households', 'pers_taz_weight': 'persons'}, inplace = True)
+allocate_df = allocate_df.merge(parcels_gdf.groupby('taz_id')['emptot_p'].sum().reset_index(), how = 'left', on = 'taz_id')
+allocate_df.rename(columns={'emptot_p' : 'employment'}, inplace = True)
+allocate_df.to_csv(popsim_run_dir_path/'data'/'user_allocation.csv', index = False)
+df.fillna(0, inplace = True)
+
 
 ## Enforce integers
 df = df.astype('int')
