@@ -126,6 +126,7 @@ for taz in synth_hhs['taz_id'].unique():
         for parcel in override[override.taz_p == taz].parcelid.unique():
             parcel_override = taz_df.sample(override.loc[override['parcelid'] == parcel].hh_p.item())
             parcel_override['parcelid'] = parcel
+            parcel_override['taz_p'] = taz
             df_list.append(parcel_override)
             taz_df = taz_df[~(taz_df.household_id.isin(parcel_override.household_id.unique()))]
             taz_parcels = taz_parcels[~(taz_parcels.parcelid == parcel)]
