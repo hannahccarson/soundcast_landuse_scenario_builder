@@ -94,13 +94,16 @@ if config['allocation_override'] is not None:
     override = override.merge(parcels[['parcelid','taz_p']], how = 'left', on = 'parcelid')
     manual_override = True
 if config['parcel_weights'] is not None:
+    emp_cols = ['empedu_p', 'empfoo_p', 'empgov_p', 'empind_p', 'empmed_p','empofc_p', 'empoth_p', 'empret_p', 'emprsc_p', 'empsvc_p']
+
     pcl_wgt = pd.read_csv(popsim_run_dir_path/'..'/config['parcel_weights'])
-    pcl_wgt['weight'] = pcl_wgt['weight']
+    pcl_wgt['weight'] = pcl_wgt['weight'] +1
     parcels = parcels.merge(pcl_wgt, how = 'left', on = 'parcelid')
-    parcels = parcels.fillna(0)
-    parcels['hh_p'] = parcels['hh_p']*(parcels['weight']+1)
+    parcels = parcels.fillna(1)
+    parcels['hh_p'] = parcels['hh_p']*(parcels['weight'])
     parcels['hh_p'] = parcels['hh_p'].apply(round)
-# Load persons and households table from model run
+    parcels[emp_cols] = parcels[emp_cols].multiply(parcels['weight'], axis = 'index')
+    parcels[emp_cols] = parcels[emp_cols].apply(round)# Load persons and households table from model run
 # This file will be modified/replaced by new results from synthetic households 
 myh5 = h5py.File(land_use_path/'hh_and_persons.h5','r')
 old_h5_hh = pd.DataFrame()
@@ -124,7 +127,14 @@ for taz in synth_hhs['taz_id'].unique():
         taz_parcels['hh_p'] = 1
     if manual_override:
         for parcel in override[override.taz_p == taz].parcelid.unique():
-            parcel_override = taz_df.sample(override.loc[override['parcelid'] == parcel].hh_p.item())
+            parcel_override_val = override.loc[override['parcelid'] == parcel].hh_p.item()
+            if np.isnan(parcel_override_val):
+                continue
+            try:
+                parcel_override = taz_df.sample(parcel_override_val, random_state = 5)
+            except:
+                print("Check that manual override in parcel {} does not exceed total households in TAZ {}".format(parcel, taz))
+                sys.exit()
             parcel_override['parcelid'] = parcel
             parcel_override['taz_p'] = taz
             df_list.append(parcel_override)
@@ -136,7 +146,7 @@ for taz in synth_hhs['taz_id'].unique():
     # Create records for each household and parcel
     taz_parcels = taz_parcels.loc[taz_parcels.index.repeat(taz_parcels['hh_p'])]
     # Return a random sample from the parcels equal to the original number of households in the taz
-    taz_parcels = taz_parcels.sample(len(taz_df), replace = True)
+    taz_parcels = taz_parcels.sample(len(taz_df), replace = True, random_state = 5)
     # merge HHs and their new parcels
     taz_parcels.reset_index(inplace=True)
     taz_df.reset_index(inplace=True)
@@ -167,13 +177,30 @@ if config['update_jobs']:
     for taz in df_allocate['taz_id'].unique():
         # Select all parcels in the zones
         df = new_parcel_df[new_parcel_df['taz_p'] == taz]
-
+        if manual_override:
+            for parcel in override[override.taz_p == taz].parcelid.unique():
+                parcel_override_val = override.loc[override['parcelid'] == parcel].emptot_p.item()
+                if np.isnan(parcel_override_val):
+                    continue
+                df_override = new_parcel_df[new_parcel_df['parcelid'] == parcel]
+                if df_override['emptot_p'].sum() > 0:
+                    new_total = parcel_override_val
+                    emp_factor = (new_total/df_override['emptot_p'].sum()).item()
+                    new_parcel_df.loc[df_override.index, emp_cols] = (df_override[emp_cols]*emp_factor).round()
+                else: 
+                    new_total = parcel_override_val
+                    df_override[emp_cols] = new_parcel_df[emp_cols].sum()
+                    emp_factor = (new_total/df_override['emptot_p'].sum()).item()
+                    new_parcel_df.loc[df_override.index, emp_cols] = (df_override[emp_cols]*emp_factor).round()
+                df = df[~df.parcelid.isin([parcel])]
+                df_allocate.loc[df_allocate['taz_id'] == taz, 'employment'] = df_allocate['employment'] - parcel_override_val
+                
         if df['emptot_p'].sum() > 0:
             # For zones with existing distribution, scale jobs based on existing distribution across sectors
             new_total = df_allocate[df_allocate['taz_id'] == taz]['employment']
             emp_factor = (new_total/df['emptot_p'].sum()).values[0]
             new_parcel_df.loc[df.index, emp_cols] = (df[emp_cols]*emp_factor).round()
-            # Note: due to rounding the exact totals will not perfectly match the emptot_p specified, but will be close
+# Note: due to rounding the exact totals will not perfectly match the emptot_p specified, but will be close
         else:
             # For zones without any distribution scale jobs across sectors using regional distributions
             # Use an even distribution across all parcels
