@@ -118,6 +118,7 @@ for col in myh5['Person'].keys():
 # based on existing household distributions with TAZs. Parcels with more households are more likely
 # to recieve new households (within a TAZ).
 df_list = []
+parcels['hh_u'] = 300
 for taz in synth_hhs['taz_id'].unique():
     # Select all of the newly generated synthetic households assigned to a TAZ
     taz_df = synth_hhs[synth_hhs['taz_id']==taz][['taz_id', 'hh_id', 'household_id']]
@@ -142,11 +143,15 @@ for taz in synth_hhs['taz_id'].unique():
             taz_parcels = taz_parcels[~(taz_parcels.parcelid == parcel)]
             
     # Select all parcels in the TAZ with households 
-    taz_parcels = taz_parcels[taz_parcels['hh_p']>0][['taz_p', 'hh_p', 'parcelid']]
-    # Create records for each household and parcel
-    taz_parcels = taz_parcels.loc[taz_parcels.index.repeat(taz_parcels['hh_p'])]
+    taz_parcels = taz_parcels[taz_parcels['hh_p']>0][['taz_p', 'hh_p','hh_u', 'parcelid']]
+    # Create records for each household as their constraint
+    taz_parcels = taz_parcels.loc[taz_parcels.index.repeat(taz_parcels['hh_u'])]
     # Return a random sample from the parcels equal to the original number of households in the taz
-    taz_parcels = taz_parcels.sample(len(taz_df), replace = True, random_state = 5)
+    try:
+        taz_parcels = taz_parcels.sample(len(taz_df), replace = False, weights = taz_parcels['hh_p'], random_state = 5)
+    except:
+        print("Not enough household units in TAZ {}. Please adjust inputs".format(taz))
+        sys.exit()
     # merge HHs and their new parcels
     taz_parcels.reset_index(inplace=True)
     taz_df.reset_index(inplace=True)
