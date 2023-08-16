@@ -123,6 +123,7 @@ for taz in synth_hhs['taz_id'].unique():
     # Select all of the newly generated synthetic households assigned to a TAZ
     taz_df = synth_hhs[synth_hhs['taz_id']==taz][['taz_id', 'hh_id', 'household_id']]
     taz_parcels = parcels.loc[parcels['taz_p']==taz]
+    taz_parcels.loc[(taz_parcels['hh_u'] > 0) & (taz_parcels['hh_p'] == 0), 'hh_p'] = .0001
     if taz_parcels['hh_p'].sum()==0:
         # if no exisiting HHs in TAZ, assign uniform distribution; one hh for each parcel
         taz_parcels['hh_p'] = 1
