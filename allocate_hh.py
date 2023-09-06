@@ -35,11 +35,11 @@ shutil.copyfile('controls.csv', popsim_run_dir_path/'configs'/'controls.csv')
 
 # Set up other paths
 land_use_path = Path(config['input_land_use_path'])
+df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
 
 if not config['allocation_only']:
     # Update controls from allocation file before running popsim:
     if config['update_hh'] or config['update_person']:
-        df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
         df = pd.read_csv(popsim_run_dir_path/'data'/'future_controls.csv')
         col_list = ['taz_id']
         if config['update_hh']:
@@ -53,7 +53,7 @@ if not config['allocation_only']:
         update_tazs = df['taz_id']
         
         # Use average household size of 2.0 if number of persons not specified in user_allocation.csv
-        df.loc[(df['taz_id'].isin(update_tazs)) &(df['persons'] == 0), 'persons'] = df['households']*2.0
+        df.loc[(df['taz_id'].isin(update_tazs)) &((df['persons'].isna()) |(df['persons'] == 0)), 'persons'] = df['households']*config['average_hh_size']
 
         # regional household totals for control calculations
         tot_hh = df.loc[df['taz_id'].isin(update_tazs), 'hh_taz_weight'].sum()
@@ -85,10 +85,15 @@ if not config['allocation_only']:
 
 # Load data
 parcels = pd.read_csv(land_use_path/'parcels_urbansim.txt', delim_whitespace=True)
+parcel_manual_dict = config['manual_xwalk']
+parcels['updated_taz'] = parcels['parcelid'].map(parcel_manual_dict)
+parcels['taz_p'] = np.where(~parcels.updated_taz.isna(), parcels.updated_taz, parcels.taz_p)
+parcels = parcels.drop('updated_taz',axis = 1)
 parcels.columns = [col.lower() for col in parcels.columns]
 synth_hhs = pd.read_csv(popsim_run_dir_path/'output'/'synthetic_households.csv')
 synth_persons = pd.read_csv(popsim_run_dir_path/'output'/'synthetic_persons.csv')
 manual_override = False
+use_capacities = config['use_capacities']
 if config['allocation_override'] is not None:
     override = pd.read_csv(popsim_run_dir_path/'..'/config['allocation_override'])
     override = override.merge(parcels[['parcelid','taz_p']], how = 'left', on = 'parcelid')
@@ -118,12 +123,16 @@ for col in myh5['Person'].keys():
 # based on existing household distributions with TAZs. Parcels with more households are more likely
 # to recieve new households (within a TAZ).
 df_list = []
-parcels['hh_u'] = 300
+if use_capacities and ('hh_u' not in parcels.columns):
+   print("No Capacities set, please include the column 'hh_u' in the parcel file to indicate the housing capacity")
+   sys.exit()
+
 for taz in synth_hhs['taz_id'].unique():
     # Select all of the newly generated synthetic households assigned to a TAZ
     taz_df = synth_hhs[synth_hhs['taz_id']==taz][['taz_id', 'hh_id', 'household_id']]
     taz_parcels = parcels.loc[parcels['taz_p']==taz]
-    taz_parcels.loc[(taz_parcels['hh_u'] > 0) & (taz_parcels['hh_p'] == 0), 'hh_p'] = .0001
+    if use_capacities:
+        taz_parcels.loc[(taz_parcels['hh_u'] > 0) & (taz_parcels['hh_p'] == 0), 'hh_p'] = .0001
     if taz_parcels['hh_p'].sum()==0:
         # if no exisiting HHs in TAZ, assign uniform distribution; one hh for each parcel
         taz_parcels['hh_p'] = 1
@@ -146,12 +155,20 @@ for taz in synth_hhs['taz_id'].unique():
     # Select all parcels in the TAZ with households 
     taz_parcels = taz_parcels[taz_parcels['hh_p']>0][['taz_p', 'hh_p','hh_u', 'parcelid']]
     # Create records for each household as their constraint
-    taz_parcels = taz_parcels.loc[taz_parcels.index.repeat(taz_parcels['hh_u'])]
+    if use_capacities:
+        taz_parcels = taz_parcels.loc[taz_parcels.index.repeat(taz_parcels['hh_u'])]
+    else:
+        taz_parcels = taz_parcels.loc[taz_parcels.index.repeat(taz_parcels['hh_p'])]
+
     # Return a random sample from the parcels equal to the original number of households in the taz
     try:
-        taz_parcels = taz_parcels.sample(len(taz_df), replace = False, weights = taz_parcels['hh_p'], random_state = 5)
+        if use_capacities:
+            taz_parcels = taz_parcels.sample(len(taz_df), replace = False, weights = taz_parcels['hh_p'], random_state = 5)
+        else:
+            taz_parcels = taz_parcels.sample(len(taz_df), replace = True, random_state = 5)
     except:
         print("Not enough household units in TAZ {}. Please adjust inputs".format(taz))
+        print(taz_parcels[['parcelid','taz_p','hh_p']])
         sys.exit()
     # merge HHs and their new parcels
     taz_parcels.reset_index(inplace=True)
@@ -160,7 +177,11 @@ for taz in synth_hhs['taz_id'].unique():
     df_list.append(taz_df)
 
 hh_parcels_df = pd.concat(df_list)
+updated_taz = hh_parcels_df.taz_id.unique()
 new_parcel_hhs_total = hh_parcels_df['parcelid'].value_counts()
+
+#create empty TAZs
+empty_hh_taz = df_allocate[df_allocate.households ==0].taz_id.unique()
 
 #############################
 # Update Parcel file
@@ -171,12 +192,16 @@ df.columns = ['new_hh']
 df.index.name = 'parcelid'
 new_parcel_df = new_parcel_df.merge(df, left_on='parcelid', right_index=True, how='left')
 # new_parcel_df['hh_p'] = new_parcel_df['new_hh'].fillna(new_parcel_df['hh_p'])
-new_parcel_df['hh_p'] = new_parcel_df['new_hh'].fillna(0)
+new_parcel_df.loc[new_parcel_df.taz_p.isin(updated_taz),'hh_p'] = new_parcel_df['new_hh'].fillna(0)
+new_parcel_df.loc[~new_parcel_df.taz_p.isin(updated_taz),'hh_p'] = new_parcel_df['new_hh'].fillna(new_parcel_df['hh_p'])
 new_parcel_df.drop('new_hh', axis=1, inplace=True)
+new_parcel_df.loc[new_parcel_df.taz_p.isin(empty_hh_taz),'hh_p'] = 0
 
 # Update employment
 if config['update_jobs']:
     df_allocate = pd.read_csv(popsim_run_dir_path/'data'/'user_allocation.csv')
+    empty_employment_taz = df_allocate[df_allocate.employment == 0].taz_id.unique()
+
     df_allocate = df_allocate[df_allocate['employment'] > 0]
     emp_cols = ['empedu_p', 'empfoo_p', 'empgov_p', 'empind_p', 'empmed_p','empofc_p', 'empoth_p', 'empret_p', 'emprsc_p', 'empsvc_p']
     df_list = []
@@ -219,16 +244,19 @@ if config['update_jobs']:
                 new_parcel_df[col].fillna(0, inplace=True)
                 # total jobs by sector
                 jobs_to_assign = (new_total*(new_parcel_df[col].sum()/new_parcel_df['emptot_p'].sum())).round().astype('int').values[0]
-                while jobs_to_assign > 0:
-                    if jobs_to_assign <= len(new_parcel_df.loc[new_parcel_df['taz_p'] == taz]):
-                        # Fewer or equal jobs than parcels in zone; assign jobs to the first parcels in the df
-                        new_parcel_df.loc[new_parcel_df[new_parcel_df['taz_p'] == taz][0:jobs_to_assign].index, col] = new_parcel_df[col] + 1
-                        jobs_to_assign = 0
-                    else:
-                        # More jobs than parcels; iterate until all sector jobs are placed
-                        new_parcel_df.loc[new_parcel_df['taz_p'] == taz, col] = new_parcel_df[col] + 1
-                        jobs_to_assign = jobs_to_assign - new_parcel_df.loc[new_parcel_df['taz_p'] == taz, col].sum().astype('int')
-
+                if len(new_parcel_df.loc[new_parcel_df['taz_p'] == taz]) > 0:
+                    while jobs_to_assign > 0:
+                        if jobs_to_assign <= len(new_parcel_df.loc[new_parcel_df['taz_p'] == taz]):
+                            # Fewer or equal jobs than parcels in zone; assign jobs to the first parcels in the df
+                            new_parcel_df.loc[new_parcel_df[new_parcel_df['taz_p'] == taz][0:jobs_to_assign].index, col] = new_parcel_df[col] + 1
+                            jobs_to_assign = 0
+                        else:
+                            # More jobs than parcels; iterate until all sector jobs are placed
+                            new_parcel_df.loc[new_parcel_df['taz_p'] == taz, col] = new_parcel_df[col] + 1
+                            jobs_to_assign = jobs_to_assign - new_parcel_df.loc[new_parcel_df['taz_p'] == taz, col].sum().astype('int')
+                else:
+                    print("No parcels in TAZ {}, please check inputs".format(taz))
+                    sys.exit()
 
 # Update parcel columns with these new totals
 new_parcel_df['emptot_p'] = new_parcel_df[emp_cols].sum(axis=1)
@@ -237,6 +265,9 @@ new_parcel_df[emp_cols] = new_parcel_df[emp_cols].fillna(0)
 # Integerize all cols
 int_cols = new_parcel_df.columns.drop(['xcoord_p','ycoord_p'])
 new_parcel_df[int_cols] = new_parcel_df[int_cols].astype('int')
+
+#empty employment
+new_parcel_df.loc[new_parcel_df.taz_p.isin(empty_employment_taz),emp_cols + ['emptot_p']] = 0
 
 new_parcel_df.to_csv(popsim_run_dir_path/'output'/'parcels_urbansim.txt', sep=' ', index=False)
 
@@ -355,6 +386,10 @@ if config['update_existing_h5']:
 else:
     export_hh_df = df_hh.copy()
     export_person_df = new_person_df.copy()
+
+#remove households if TAZ is empty
+export_hh_df = export_hh_df[~export_hh_df.hhtaz.isin(empty_hh_taz)]
+export_person_df = export_person_df[export_person_df.hhno.isin(export_hh_df.hhno.unique())]
 
 # Write to h5 file
 # Delete file if exists

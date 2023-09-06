@@ -25,6 +25,9 @@ import yaml
 from pathlib import Path
 import shutil
 
+
+os.chdir(r'C:\Users\hannah.carson\OneDrive - Resource Systems Group, Inc\PierceCounty\psrc_landuse_allocator\Task_landuse_allocator')
+
 def h5_to_data_frame(h5file, integer_cols, table_name):
     """Load h5 tables as Pandas DataFrame object"""
     
@@ -100,7 +103,10 @@ else:
     puma_gdf = gpd.read_file(gis_path/config['puma_layer']/'.shp')
     puma_gdf.rename(columns={config['puma_id'] : 'PUMA'}, inplace = True)
 
-taz_study_area = taz_study_area.to_crs({'init':"EPSG:2285"})
+try:
+    taz_study_area = taz_study_area.to_crs({'init':"EPSG:2285"})
+except:
+    taz_study_area.crs = {'init':"EPSG:2285"}
 # Load parcel data from Soundcast input as geoDataframe
 parcels_gdf = pd.read_csv(land_use_path/config['parcel_file'], sep = ' ')
 parcels_gdf.columns= parcels_gdf.columns.str.lower()
@@ -137,6 +143,7 @@ taz_puma_gdf.to_csv(popsim_run_dir_path/'data'/'geo_cross_walk.csv', index=False
 # Build PopulationSim control file from future land use
 # Distribution of household and person characteristics will be applied to any change in totals
 study_area_hhs = hh[hh['hhparcel'].isin(parcels_gdf[config['parcel_id']])]
+# study_area_hhs = study_area_hhs.merge(parcels_gdf[['parcelid',config['taz_id']]], how = 'left',right_on = 'parcelid',left_on = 'hhparcel')
 # study_area_hhs = update_df(study_area_hhs, 'hhparcel', parcels_gdf, config['parcel_id'], 'taz_id')
 study_area_hhs['taz_id'] = study_area_hhs['hhtaz']
 study_area_persons = persons[persons['hhno'].isin(study_area_hhs['hhno'])]
@@ -176,8 +183,8 @@ col_list.append(recode(study_area_persons, 'pagey', 'age', [-1, 19, 35, 60, 999]
 col_list.append(recode(study_area_persons, 'pwtyp', 'worker', [0, 999], ['is_worker'], 'taz_id'))
 
 # Race
-col_list.append(recode(study_area_persons, 'prace', 'num_hh', [0, 1, 2, 3, 4, 5, 6, 200], 
-                       ['white_non_hispanic', 'black_non_hispanic', 'asian_non_hispanic', 'other_non_hispanic', 'two_or_more_races_non_hispanic', 'white_hispanic', 'non_white_hispanic'], 'taz_id'))
+# col_list.append(recode(study_area_persons, 'prace', 'num_hh', [0, 1, 2, 3, 4, 5, 6, 200], 
+#                         ['white_non_hispanic', 'black_non_hispanic', 'asian_non_hispanic', 'other_non_hispanic', 'two_or_more_races_non_hispanic', 'white_hispanic', 'non_white_hispanic'], 'taz_id'))
 
 df = pd.concat(col_list, axis = 1)
 df.reset_index(inplace = True)
