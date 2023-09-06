@@ -85,10 +85,11 @@ if not config['allocation_only']:
 
 # Load data
 parcels = pd.read_csv(land_use_path/'parcels_urbansim.txt', delim_whitespace=True)
-parcel_manual_dict = config['manual_xwalk']
-parcels['updated_taz'] = parcels['parcelid'].map(parcel_manual_dict)
-parcels['taz_p'] = np.where(~parcels.updated_taz.isna(), parcels.updated_taz, parcels.taz_p)
-parcels = parcels.drop('updated_taz',axis = 1)
+if config['manual_xwalk'] is not None:
+    parcel_manual_dict = config['manual_xwalk']
+    parcels['updated_taz'] = parcels['parcelid'].map(parcel_manual_dict)
+    parcels['taz_p'] = np.where(~parcels.updated_taz.isna(), parcels.updated_taz, parcels.taz_p)
+    parcels = parcels.drop('updated_taz',axis = 1)
 parcels.columns = [col.lower() for col in parcels.columns]
 synth_hhs = pd.read_csv(popsim_run_dir_path/'output'/'synthetic_households.csv')
 synth_persons = pd.read_csv(popsim_run_dir_path/'output'/'synthetic_persons.csv')
@@ -126,7 +127,8 @@ df_list = []
 if use_capacities and ('hh_u' not in parcels.columns):
    print("No Capacities set, please include the column 'hh_u' in the parcel file to indicate the housing capacity")
    sys.exit()
-
+elif not use_capacities:
+    parcels['hh_u'] = 0
 for taz in synth_hhs['taz_id'].unique():
     # Select all of the newly generated synthetic households assigned to a TAZ
     taz_df = synth_hhs[synth_hhs['taz_id']==taz][['taz_id', 'hh_id', 'household_id']]
