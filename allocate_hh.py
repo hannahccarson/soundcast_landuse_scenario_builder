@@ -255,7 +255,7 @@ if config['update_jobs']:
                         else:
                             # More jobs than parcels; iterate until all sector jobs are placed
                             new_parcel_df.loc[new_parcel_df['taz_p'] == taz, col] = new_parcel_df[col] + 1
-                            jobs_to_assign = jobs_to_assign - 1
+                            jobs_to_assign = jobs_to_assign - len(new_parcel_df.loc[new_parcel_df['taz_p'] == taz])
                 else:
                     print("No parcels in TAZ {}, please check inputs".format(taz))
                     sys.exit()
